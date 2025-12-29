@@ -1,0 +1,64 @@
+name: lr
+
+paths:
+  out_basedir: "src/tmp"
+  user_history_path: "/data2/zhy/Movie_Recsys/Data/MovieLens_1M_data/user_history.json"
+
+features:
+  sparse_feature_names:
+    - user_id
+    - item_id
+    - category
+    - subcategory
+    - user_click_category
+
+  dense_feature_names: []
+
+  array_feature_names: []
+
+  item_feature_names:
+    - item_id
+    - category
+    - subcategory
+
+  user_feature_names:
+    - user_id
+    - user_click_category
+
+  array_max_length: {}
+
+embeddings:
+  embedding_size:
+    user_id: 1 # 16
+    item_id: 1
+    category: 1
+    subcategory: 1
+    user_click_category: 1
+
+  embedding_table_size:
+    user_id: 94058
+    item_id: 65239
+    category: 18
+    subcategory: 270
+    user_click_category: 18
+
+  share_emb_table_features: {}
+
+dataset:
+  batch_size: 512
+  num_workers: 4
+  pin_memory: true
+
+
+train_hparams:
+  val_freq: 1
+  max_epoch: 30
+  lr: 1.0e-3
+  min_lr: 5.0e-6
+  lr_milestones:
+    - 40000
+    - 200000
+  max_step: 300000
+  device: "gpu"
+  gpus:
+    - 0
