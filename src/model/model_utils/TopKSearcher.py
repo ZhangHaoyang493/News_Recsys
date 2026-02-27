@@ -3,6 +3,9 @@ import torch.nn as nn
 import faiss
 import numpy as np
 from typing import List, Tuple
+from ...Logger.logging import Logger
+
+logger = Logger.get_logger('TopKSearcher')
 
 class TopKSearcher:
     def __init__(self, k: int, use_gpu: bool = False):
@@ -15,23 +18,25 @@ class TopKSearcher:
         self.index = None
         self.use_gpu = use_gpu
         self.dimension = None
+        self.item_ids = None
 
-    def update_embedding(self, emb_layer: nn.Embedding, normalize: bool = False):
+    def update_embedding(self, embeddings: np.ndarray, ids: np.ndarray, normalize: bool = False):
         """
         更新存储的 Embedding 表到 Faiss 索引中
-        :param emb_layer: torch.nn.Embedding 层
+        :param embeddings: numpy array, shape (N, dim), 物料的 embedding
+        :param ids: numpy array, shape (N, 1) 或 (N,), 物料对应的索引
         :param normalize: 是否对向量进行 L2 归一化 (如果为 True，内积等价于余弦相似度)
         """
-        # 1. 获取权重并转换为 numpy (float32)
-        # .detach() 从计算图分离，.cpu() 移至内存
-        weights = emb_layer.weight.detach().cpu().numpy().astype('float32')
+        # 1. 转换数据类型
+        embeddings = embeddings.astype('float32')
+        self.item_ids = ids.flatten()
         
-        self.dimension = weights.shape[1]
-        num_embeddings = weights.shape[0]
+        self.dimension = embeddings.shape[1]
+        num_embeddings = embeddings.shape[0]
 
         # 2. 如果需要余弦相似度，先进行归一化
         if normalize:
-            faiss.normalize_L2(weights)
+            faiss.normalize_L2(embeddings)
 
         # 3. 构建 Faiss 索引
         # IndexFlatIP (Inner Product) 适用于召回模型，计算点积
@@ -43,30 +48,31 @@ class TopKSearcher:
             index = faiss.index_cpu_to_gpu(res, 0, index)
             
         # 5. 添加数据
-        index.add(weights)
+        index.add(embeddings)
         self.index = index
         
-        print(f"[TopKSearcher] Index updated. Size: {num_embeddings}, Dim: {self.dimension}")
+        logger.info(f"[TopKSearcher] Index updated. Size: {num_embeddings}, Dim: {self.dimension}")
 
-    def search(self, query_embeddings: List[torch.Tensor], normalize: bool = False) -> Tuple[List[List[int]], List[List[float]]]:
+    def search(self, query_embeddings: torch.Tensor, normalize: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         在 Faiss 中查找最近的 K 个向量
-        :param query_embeddings: List[Tensor]，每个 Tensor 代表一个 query 的 embedding
+        :param query_embeddings: Tensor, shape (B, dim), query 的 embedding
         :param normalize: 是否对 Query 进行归一化 (需与 update_embedding 保持一致)
         :return: (indices, scores)
-                 indices: List[List[int]], 查找到的 Item ID
-                 scores: List[List[float]], 对应的相似度分数 (内积值)
+                 indices: Tensor, shape (B, k), 查找到的 Item ID
+                 scores: Tensor, shape (B, k), 对应的相似度分数 (内积值)
         """
         if self.index is None:
             raise ValueError("Index not initialized. Please call update_embedding first.")
 
-        # 1. 数据预处理：List[Tensor] -> Tensor (Batch) -> Numpy
-        # 假设输入的 list 中每个 tensor 是一维的 (dim,)
-        if len(query_embeddings) == 0:
-            return [], []
+        # 1. 数据预处理
+        if query_embeddings.numel() == 0:
+            return torch.empty((0, self.k), dtype=torch.long, device=query_embeddings.device), \
+                   torch.empty((0, self.k), device=query_embeddings.device)
 
-        # stack 将 [tensor(d), tensor(d)] 堆叠为 tensor(batch, d)
-        query_batch = torch.stack(query_embeddings).detach().cpu().numpy().astype('float32')
+        device = query_embeddings.device
+        # Tensor (Batch) -> Numpy
+        query_batch = query_embeddings.detach().cpu().numpy().astype('float32')
 
         # 2. 如果 Item 侧归一化了，Query 侧通常也需要归一化
         if normalize:
@@ -76,9 +82,15 @@ class TopKSearcher:
         # D: Distances (Scores), I: Indices
         D, I = self.index.search(query_batch, self.k)
 
-        # 4. 格式转换为 Python List
-        # I 和 D 的形状都是 (batch_size, k)
-        indices_list = I.tolist()
-        scores_list = D.tolist()
+        # 4. 映射 ID 并转回 Tensor
+        if self.item_ids is not None:
+            # 将 Faiss 内部索引映射回原始 item_ids
+            indices = self.item_ids[I]
+        else:
+            indices = I
+            
+        # 转回 Tensor
+        indices_tensor = torch.from_numpy(indices).to(device)
+        scores_tensor = torch.from_numpy(D).to(device)
 
-        return indices_list, scores_list
+        return indices_tensor, scores_tensor

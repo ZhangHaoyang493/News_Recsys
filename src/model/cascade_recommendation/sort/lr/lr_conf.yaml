@@ -1,0 +1,12 @@
+name: lr
+
+embeddings:
+  embedding_tables:
+    base_embedding_table:
+      embedding_dims:
+        user_id: 1
+        item_id: 1
+        category: 1
+        subcategory: 1
+        user_click_category: 1
+      share_emb_table_features: {}

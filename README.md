@@ -50,11 +50,36 @@ mkdir -p Data/MIND/train Data/MIND/val
 pip install -r requirements.txt
 ```
 
-## 3. 运行流程 (Workflow)
+---
+
+## 3. 开发与逻辑文档
+
+本项目包含完整的推荐系统开发文档，涵盖了从特征工程、模型定义到评估指标的详细说明，方便进行二次开发和逻辑查阅。
+
+### 3.1 特征工程 (Feature Engineering)
+*   **[Feature Extractor 开发逻辑详解](documents/feature_extractor_logic.md)**: 
+    *   详细解析了 `src/dataset/FeaturesGenerator` 模块的架构。
+    *   说明了如何通过 `feature_extractor_*.py` 添加新特征。
+    *   解释了 ID Mapping、缓存机制以及 `config_fg.yaml` 配置文件的各项参数。
+
+### 3.2 模型开发 (Model Development)
+*   **[BaseModel 逻辑梳理与二次开发指南](documents/base_model_logic.md)**:
+    *   核心文档。梳理了基类 `BaseModel` 的配置读取、Embedding 层自动构建以及输入维度计算逻辑。
+    *   指导如何通过修改配置文件快速调整模型结构。
+
+### 3.3 评估指标 (Evaluation Metrics)
+*   **[Sort 模型评估指标与逻辑详解](documents/sort_model_metrics.md)**:
+    *   针对排序模型 (`BaseModelSort`)，详细说明了 AUC, GAUC, LogLoss, NDCG@K, MRR@K 等指标的定义与计算实现。
+*   **[Recall 模型评估指标与逻辑详解](documents/recall_model_metrics.md)**:
+    *   针对召回模型 (`BaseModelRecall`)，解析了双塔模型评估流程（全量物品索引 + Top-K 搜索）以及 HR@K, NDCG@K 等召回指标。
+
+---
+
+## 4. 运行流程 (Workflow)
 
 本项目使用 `Makefile` 统筹数据处理与模型训练流程。
 
-### 3.1 数据预处理 (Preprocessing)
+### 4.1 数据预处理 (Preprocessing)
 解析原始数据，生成中间格式：
 ```bash
 make preprocess
@@ -62,29 +87,34 @@ make preprocess
 配置文件：`src/dataset/FeaturesGenerator/config_fg.yaml`
 
 ### 3.2 特征提取 (Feature Extraction)
+### 4.2 特征提取 (Feature Extraction)
 基于预处理数据提取模型特征：
 ```bash
 make fe
 ```
 配置文件：`src/dataset/FeaturesGenerator/config_fg.yaml`
 
-### 3.3 模型训练 (Training)
-指定模型名称进行训练。`model` 参数对应 `src/model/sort/` 下的文件夹名称。
+
+### 4.3 模型训练 (Training)
+指定模型名称进行训练。`model` 参数对应 `src/model/` (retrieval/sort) 下的模型文件夹名称。
 
 示例（训练 deep 模型）：
 ```bash
-make train model=deep
+make train stage=sort model=deep
 ```
-配置文件：`src/model/sort/<model>/train_cf_<model>.yaml`
+配置文件：`src/model/cascade_recommendation/sort/deep/deep_conf.yaml`
 
-### 3.4 日志分析 (Log Analysis)
+stage 参数可选 `retrieval` 或 `sort`，分别对应召回层和排序层的训练。
+
+### 4.4 日志分析 (Log Analysis)
 自动寻找并分析指定模型最近一次实验的验证集日志，并打印出效果最好的那一次结果。
 ```bash
 make log model=deep
 ```
 
-### 3.5 辅助工具 (Utils)
+### 4.5 辅助工具 (Utility)
 *   **可视化用户历史**: `make visualize_history`
+*   **召回结果可视化**: `make vis_recall` (需指定 path 参数)
 *   **清理临时文件**: `make clean`
 
 

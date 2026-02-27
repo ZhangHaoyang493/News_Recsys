@@ -30,3 +30,7 @@ __pycache__
 */__pycache__
 src/model/sort_bak
 experiments/
+*.html
+*/**/*.html
+*/*.html
+test.txt

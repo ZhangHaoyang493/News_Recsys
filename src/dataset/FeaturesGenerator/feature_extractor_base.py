@@ -68,12 +68,21 @@ class FeatureExtractorBase(ABC):
         
         # 加载数据
         self._load_item_data()
+        self._load_graph_embeddings()
         
         # 子类钩子：用于初始化某些特定的逻辑（如加载预训练词向量等）
         self.initialization()
 
+        self.extracted_feature_cache = {}
+
+    @abstractmethod
     def initialization(self):
         """子类可重写此方法以进行自定义初始化"""
+        pass
+
+    @abstractmethod
+    def initialize_caches(self):
+        """子类可重写此方法以初始化或清理特征提取过程中使用的缓存"""
         pass
 
     @abstractmethod
@@ -99,6 +108,8 @@ class FeatureExtractorBase(ABC):
         self.item_path = preprocess_dir / 'all_news_preprocess.csv'
         self.train_behavior_path = preprocess_dir / 'train_behaviors_processed.csv'
         self.val_behavior_path = preprocess_dir / 'dev_behaviors_processed.csv'
+        self.entity_embed_path = preprocess_dir / 'entity_embedding_all.vec'
+        self.relation_embed_path = preprocess_dir / 'relation_embedding_all.vec'
         self.output_feature_dir = self.out_basedir / 'extractored_feature'
 
     def _prepare_output_dir(self):
@@ -107,6 +118,10 @@ class FeatureExtractorBase(ABC):
             logger.warning(f"Cleaning existing output directory: {self.output_feature_dir}")
             shutil.rmtree(self.output_feature_dir)
         self.output_feature_dir.mkdir(parents=True, exist_ok=True)
+
+    def _format_string(self, s):
+        """格式化字符串，去除特殊字符等"""
+        return s.strip().strip('"').replace('""', '"')
 
     def _load_item_data(self):
         """加载新闻/物品基础数据到内存"""
@@ -131,11 +146,54 @@ class FeatureExtractorBase(ABC):
                         'title': parts[3],
                         'abstract': parts[4],
                         'url': parts[5],
-                        'title_entities': parts[6],
-                        'abstract_entities': parts[7]
+                        'title_entities': self._format_string(parts[6]),
+                        'abstract_entities': self._format_string(parts[7])
                     }
+
+                    # 处理 title_entities 和 abstract_entities 的 JSON 结构
+                    for key in ['title_entities', 'abstract_entities']:
+                        try:
+                            self.item_data_dict[news_id][key] = json.loads(self.item_data_dict[news_id][key])
+                        # except json.JSONDecodeError:
+                        except:
+                            logger.warning(f"Failed to parse JSON for {key} of news_id {news_id}. Setting as empty list.")
+                            self.item_data_dict[news_id][key] = []
+
                 except ValueError as e:
                     logger.warning(f"Skipping malformed line in item data: {e}")
+    def _load_graph_embeddings(self):
+        """
+        加载 entity_embedding_all.vec 和 relation_embedding_all.vec
+        格式：第一列为 Key，后续列为 Embedding 向量（浮点数），以制表符分隔
+        """
+        self.entity_embedding_dict = {}
+        self.relation_embedding_dict = {}
+
+        # 1. Load Entity Embeddings
+        if self.entity_embed_path.exists():
+            logger.info(f"Loading entity embeddings from {self.entity_embed_path}...")
+            with open(self.entity_embed_path, 'r', encoding='utf-8') as f:
+                for line in tqdm(f, desc="Reading Entity Embeddings", ncols=100):
+                    parts = line.strip().split('\t')
+                    if len(parts) < 2: continue
+                    key = parts[0]
+                    vector = [float(x) for x in parts[1:]]
+                    self.entity_embedding_dict[key] = vector
+        else:
+            logger.warning(f"Entity embedding file not found: {self.entity_embed_path}")
+
+        # 2. Load Relation Embeddings
+        if self.relation_embed_path.exists():
+            logger.info(f"Loading relation embeddings from {self.relation_embed_path}...")
+            with open(self.relation_embed_path, 'r', encoding='utf-8') as f:
+                for line in tqdm(f, desc="Reading Relation Embeddings", ncols=100):
+                    parts = line.strip().split('\t')
+                    if len(parts) < 2: continue
+                    key = parts[0]
+                    vector = [float(x) for x in parts[1:]]
+                    self.relation_embedding_dict[key] = vector
+        else:
+            logger.warning(f"Relation embedding file not found: {self.relation_embed_path}")
 
     def get_feature_embedding_idx(self, feature_name: str, feature_value: Any) -> int:
         """
@@ -208,6 +266,8 @@ class FeatureExtractorBase(ABC):
         if not input_path.exists():
             logger.warning(f"File not found: {input_path}")
             return
+        
+        self.initialize_caches()
 
         output_filename = input_path.stem.split('_')[0] + '_features.txt' # e.g., train_features.txt
         output_path = self.output_feature_dir / output_filename
@@ -222,6 +282,7 @@ class FeatureExtractorBase(ABC):
                     # 解析原始行
                     parts = line.strip().split('\t')
                     # 假设格式: req_id, uid, time, hist, item_id, label
+                    impression_id = int(parts[0])
                     user_id = int(parts[1])
                     timestamp = int(parts[2])
                     history_str = parts[3]
@@ -233,6 +294,7 @@ class FeatureExtractorBase(ABC):
                     
                     # 构建上下文对象
                     data_context = {
+                        'impression_id': impression_id,
                         'item_info': item_info,
                         'user_info': {
                             'user_id': user_id,

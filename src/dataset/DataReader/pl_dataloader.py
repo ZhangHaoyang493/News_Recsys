@@ -10,20 +10,20 @@ from ...Logger.logging import Logger
 class MINDDataModule(pl.LightningDataModule):
     """
     全配置驱动的 MIND 数据模块
-    所有参数（batch_size, num_workers, file_paths）均从 config_path 指向的 YAML 中读取。
+    所有参数（batch_size, num_workers, file_paths）均从 conf 指向的 YAML 中读取。
     """
 
-    def __init__(self, config_path: str):
+    def __init__(self, config):
         """
         Args:
-            config_path (str): YAML 配置文件路径
+            conf (str): YAML 配置
         """
         super().__init__()
-        self.save_hyperparameters() # 自动保存 __init__ 参数 (这里只有 config_path)
-        self.config_path = config_path
+        self.save_hyperparameters() # 自动保存 __init__ 参数 (这里只有 conf)
+
         
         # 1. 加载配置
-        self.conf = OmegaConf.load(config_path)
+        self.conf = config
         
         # 2. 从配置中提取路径
         # 根据之前的 yaml 结构: paths.out_basedir
@@ -40,6 +40,7 @@ class MINDDataModule(pl.LightningDataModule):
         feature_dir = os.path.join(self.out_basedir, 'extractored_feature')
         self.train_file_path = os.path.join(feature_dir, "train_features.txt")
         self.val_file_path = os.path.join(feature_dir, "dev_features.txt")
+        self.news_file_path = os.path.join(feature_dir, "item_features.txt")
         
         # 占位符
         self.train_dataset = None
@@ -64,14 +65,32 @@ class MINDDataModule(pl.LightningDataModule):
             
             # 实例化你的 DataReader
             self.train_dataset = DataReader(
-                config_path=self.config_path, 
-                feature_file_path=self.train_file_path
+                config=self.conf, 
+                feature_file_path=self.train_file_path,
+                filter_negative=(self.conf.train_stage == "retrieval")
             )
+
+            if self.conf.dataset.only_test_warm_up_user:
+                train_user_id_set = self.train_dataset.get_user_id_set()
             
             self.logger.info(f"Loading Val Data from: {self.val_file_path}")
-            self.val_dataset = DataReader(
-                config_path=self.config_path, 
-                feature_file_path=self.val_file_path
+            if self.conf.dataset.only_test_warm_up_user:
+                self.logger.info(f"Only test warm up user is True!")
+                self.val_dataset = DataReader(
+                    config=self.conf, 
+                    feature_file_path=self.val_file_path,
+                    train_user_id_set=train_user_id_set
+                )
+            else:
+                self.val_dataset = DataReader(
+                    config=self.conf, 
+                    feature_file_path=self.val_file_path
+                )
+
+            self.logger.info("Loading News Data from: {}".format(self.news_file_path))
+            self.news_dataset = DataReader(
+                config=self.conf,
+                feature_file_path=self.news_file_path,
             )
 
     def train_dataloader(self):
@@ -86,11 +105,23 @@ class MINDDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self):
-        return DataLoader(
+        validation_dataloader = DataLoader(
             self.val_dataset,
-            batch_size=self.batch_size,
+            batch_size=1024,
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=True if self.num_workers > 0 else False
         )
+        if self.conf.train_stage == "retrieval":
+            news_dataloader = DataLoader(
+                self.news_dataset,
+                batch_size=1024,
+                shuffle=False,
+                num_workers=self.num_workers,
+                pin_memory=self.pin_memory,
+                persistent_workers=True if self.num_workers > 0 else False
+            )
+            return [news_dataloader, validation_dataloader]
+
+        return validation_dataloader

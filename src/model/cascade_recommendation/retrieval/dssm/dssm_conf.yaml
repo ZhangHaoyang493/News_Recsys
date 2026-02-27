@@ -1,0 +1,3 @@
+name: dssm
+k: 20
+train_stage: retrieval

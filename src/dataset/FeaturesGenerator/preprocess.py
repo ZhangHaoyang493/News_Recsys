@@ -173,6 +173,43 @@ def process_behaviors(input_path, output_path, user_map, news_map):
     df_exploded.to_csv(output_path, index=False, sep='\t', header=False)
     print(f"  - [完成] Behaviors 已保存至: {output_path}")
 
+def process_embeddings(data_root, sub_datasets, out_base):
+    print("\nStep 4: 合并 Entity 和 Relation Embedding...")
+    
+    embedding_files = {
+        'entity_embedding.vec': 'entity_embedding_all.vec',
+        'relation_embedding.vec': 'relation_embedding_all.vec'
+    }
+
+    for input_filename, output_filename in embedding_files.items():
+        print(f"  - 正在处理 {input_filename} ...")
+        df_list = []
+        for sub in sub_datasets:
+            path = os.path.join(data_root, sub, input_filename)
+            if os.path.exists(path):
+                print(f"    -> 读取: {path}")
+                # header=None, 第一列为key
+                df = pd.read_csv(path, sep='\t', header=None)
+                df_list.append(df)
+        
+        if not df_list:
+            print(f"    ! 未找到任何 {input_filename} 文件，跳过。")
+            continue
+            
+        # 合并
+        full_df = pd.concat(df_list, ignore_index=True)
+        print(f"    -> 合并后总行数: {len(full_df)}")
+        
+        # 去重 (根据第一列 Key)
+        full_df.drop_duplicates(subset=[0], keep='first', inplace=True)
+        print(f"    -> 去重后行数: {len(full_df)}")
+        
+        # 保存
+        out_path = os.path.join(out_base, 'preprocess', output_filename)
+        Path(os.path.dirname(out_path)).mkdir(parents=True, exist_ok=True)
+        full_df.to_csv(out_path, sep='\t', header=False, index=False)
+        print(f"    -> [完成] 已保存至: {out_path}")
+
 def main():
     args = parse_args()
     
@@ -214,7 +251,10 @@ def main():
         output_behaviors = os.path.join(out_base, 'preprocess', f'{file_suffix}_behaviors_processed.csv')
         
         process_behaviors(input_behaviors, output_behaviors, user_map, news_map)
-        
+    
+    # Step 4: 处理 Embeddings
+    process_embeddings(data_root, sub_datasets, out_base)
+
     print("\n所有任务全部完成。")
 
 if __name__ == "__main__":

@@ -1,0 +1,27 @@
+name: widedeep
+
+embeddings:
+  embedding_table_size:
+    user_click_category_cross: 324
+    user_click_subcategory_cross: 4860
+
+  embedding_tables:
+    wide_embedding_table:
+      embedding_dims:
+        category: 1
+        subcategory: 1
+        user_click_category: 1
+        user_click_category_cross: 1
+        user_click_subcategory_cross: 1
+      share_emb_table_features: {}
+
+wide_and_deep_cfg:
+    wide_feature_names: 
+      # - category
+      # - subcategory
+      # - user_click_category
+      - user_click_category_cross
+      # - user_click_subcategory_cross
+    l1_lambda: 0.0001
+    lr: 0.01
+    
