@@ -73,13 +73,11 @@ class BaseModel(L.LightningModule):
         self.sparse_feature_names: Set[str] = set(OmegaConf.to_container(features_cfg.get('sparse_feature_names', []), resolve=True) or [])
         self.dense_feature_names: Set[str] = set(OmegaConf.to_container(features_cfg.get('dense_feature_names', []), resolve=True) or [])
         self.array_feature_names: Set[str] = set(OmegaConf.to_container(features_cfg.get('array_feature_names', []), resolve=True) or [])
-        self.vector_feature_names: Set[str] = set(OmegaConf.to_container(features_cfg.get('vector_feature_names', []), resolve=True) or [])
         
         self.item_feature_names: Set[str] = set(OmegaConf.to_container(features_cfg.get('item_feature_names', []), resolve=True) or [])
         self.user_feature_names: Set[str] = set(OmegaConf.to_container(features_cfg.get('user_feature_names', []), resolve=True) or [])
         
         self.array_max_length: Dict[str, int] = OmegaConf.to_container(features_cfg.get('array_max_length', {}), resolve=True) or {}
-        self.vector_feature_dim: Dict[str, int] = OmegaConf.to_container(features_cfg.get('vector_max_length', {}), resolve=True) or {}
         self.dense_feature_dim: int = features_cfg.get('dense_feature_dim', 1)
 
         # --- 3. Embeddings ---
@@ -111,11 +109,6 @@ class BaseModel(L.LightningModule):
         for fname in feature_names:
             if fname in self.dense_feature_names:
                 total_dim += self.dense_feature_dim
-            elif fname in self.vector_feature_names:
-                 dim = self.vector_feature_dim.get(fname)
-                 if dim is None:
-                     raise ValueError(f"Vector feature '{fname}' missing dimension config in 'vector_feature_dim'.")
-                 total_dim += dim
             else:
                 emb_fname = self._get_emb_feature_name(share_emb_table_features, fname)
                 dim = self.embedding_tables_cfg['base_embedding_table']['embedding_dims'].get(emb_fname)
@@ -257,25 +250,12 @@ class BaseModel(L.LightningModule):
                 logger.error(f"Feature '{fname}' not found in batch.")
                 raise ValueError(f"Feature '{fname}' not found in batch.")
             
-            # --- 1. Vector Features (No Embedding Lookup) ---
-            if fname in self.vector_feature_names:
-                emb = batch[fname] # Shape: (batch_size, num, dim)
-                mask = batch.get(f"{fname}_mask", None)
-                # Pooling: (batch_size, num, dim) -> (batch_size, dim)
-                emb = self.array_feature_pooling(emb, mask)
-                emb_list.append(emb)
-                dims.append(emb.shape[1])
-                continue
-
-            # --- 2. Other Features (Lookup or Dense) ---
             if fname in self.array_feature_names:
                 mask = batch.get(f"{fname}_mask", None)
 
-            # 获取 Embedding (或 Dense 值)
-            val = batch[fname]
+            val = batch[fname] if not (fname in self.array_feature_names) else batch[fname] * mask
             emb = self.get_feature_embedding(embedding_tables_name, fname, val)
             
-            # --- 3. Pooling if Array ---
             if fname in self.array_feature_names:
                 emb = self.array_feature_pooling(emb, mask)
             

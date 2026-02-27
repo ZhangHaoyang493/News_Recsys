@@ -28,11 +28,10 @@ class DataReader(Dataset):
         self.sparse_features = set(config.features.sparse_feature_names)
         self.dense_features = set(config.features.dense_feature_names)
         self.array_features = set(config.features.array_feature_names)
-        self.vector_features = set(config.features.vector_feature_names)
+        self.vector_features = set(config.features.get('vector_feature_names', []))
         
         # 获取数组特征的最大长度配置
         self.array_max_length = config.features.array_max_length
-        self.vector_max_length = config.features.vector_max_length
 
         # 校验数据路径
         self.data_path = feature_file_path
@@ -112,54 +111,7 @@ class DataReader(Dataset):
                 # 转为 Tensor
                 ret_datas[feature_name] = torch.tensor(indices, dtype=torch.long)
                 ret_datas[f"{feature_name}_mask"] = torch.tensor(mask, dtype=torch.float32)
-
-            # 4. 处理向量列表特征 (Vector List)
-            elif feature_name in self.vector_features:
-                dim = self.vector_feature_dim.get(feature_name)
-                if dim is None:
-                    raise ValueError(f"Dim for vector feature '{feature_name}' missing in config.")
-
-                if val_str:
-                     # val_str 格式: "dim,num,ele1,ele2..."
-                    parts = [float(x) for x in val_str.split(',')]
-                    # 至少包含 dim, num
-                    if len(parts) >= 2:
-                        input_dim = int(parts[0])
-                        num = int(parts[1])
-                        max_num = self.vector_max_length.get(feature_name)
-                        if max_num is None:
-                            raise ValueError(f"Max num for vector feature '{feature_name}' missing in config.")
-                        
-                        elements = parts[2:]
-                        
-                        if input_dim != dim:
-                            raise ValueError(f"Dimension mismatch for vector feature '{feature_name}': expected {dim}, got {input_dim}")
-                        
-                        if len(elements) != dim * num:
-                            raise ValueError(f"Element count mismatch for vector feature '{feature_name}': expected {dim*num}, got {len(elements)}")
-                        
-                        # 重塑 Tensor: (num, dim)
-                        tensor = torch.tensor(elements, dtype=torch.float32).view(num, dim)
-
-                        # Truncation & Padding
-                        if num >= max_num:
-                            # 截断或刚好
-                            tensor = tensor[:max_num, :]
-                            mask = [1.0] * max_num
-                        else:
-                            # Padding: 补 0 向量
-                            pad_len = max_num - num
-                            pad_tensor = torch.zeros((pad_len, dim), dtype=torch.float32)
-                            tensor = torch.cat([tensor, pad_tensor], dim=0)
-                            mask = [1.0] * num + [0.0] * pad_len
-                            
-                        ret_datas[feature_name] = tensor
-                        # 添加 Mask: (max_num,)
-                        ret_datas[f"{feature_name}_mask"] = torch.tensor(mask, dtype=torch.float32)
-                    else:
-                        raise ValueError(f"Invalid format for vector feature '{feature_name}': expected at least 2 headers (dim,num)")
-                else:
-                    raise ValueError(f"Empty value for vector feature '{feature_name}'")
+                
 
         # 处理标签 (支持多目标)
         labels = [float(l) for l in label_part.strip().split(' ')]

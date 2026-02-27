@@ -68,7 +68,6 @@ class FeatureExtractorBase(ABC):
         
         # 加载数据
         self._load_item_data()
-        self._load_graph_embeddings()
         
         # 子类钩子：用于初始化某些特定的逻辑（如加载预训练词向量等）
         self.initialization()
@@ -108,8 +107,6 @@ class FeatureExtractorBase(ABC):
         self.item_path = preprocess_dir / 'all_news_preprocess.csv'
         self.train_behavior_path = preprocess_dir / 'train_behaviors_processed.csv'
         self.val_behavior_path = preprocess_dir / 'dev_behaviors_processed.csv'
-        self.entity_embed_path = preprocess_dir / 'entity_embedding_all.vec'
-        self.relation_embed_path = preprocess_dir / 'relation_embedding_all.vec'
         self.output_feature_dir = self.out_basedir / 'extractored_feature'
 
     def _prepare_output_dir(self):
@@ -161,39 +158,6 @@ class FeatureExtractorBase(ABC):
 
                 except ValueError as e:
                     logger.warning(f"Skipping malformed line in item data: {e}")
-    def _load_graph_embeddings(self):
-        """
-        加载 entity_embedding_all.vec 和 relation_embedding_all.vec
-        格式：第一列为 Key，后续列为 Embedding 向量（浮点数），以制表符分隔
-        """
-        self.entity_embedding_dict = {}
-        self.relation_embedding_dict = {}
-
-        # 1. Load Entity Embeddings
-        if self.entity_embed_path.exists():
-            logger.info(f"Loading entity embeddings from {self.entity_embed_path}...")
-            with open(self.entity_embed_path, 'r', encoding='utf-8') as f:
-                for line in tqdm(f, desc="Reading Entity Embeddings", ncols=100):
-                    parts = line.strip().split('\t')
-                    if len(parts) < 2: continue
-                    key = parts[0]
-                    vector = [float(x) for x in parts[1:]]
-                    self.entity_embedding_dict[key] = vector
-        else:
-            logger.warning(f"Entity embedding file not found: {self.entity_embed_path}")
-
-        # 2. Load Relation Embeddings
-        if self.relation_embed_path.exists():
-            logger.info(f"Loading relation embeddings from {self.relation_embed_path}...")
-            with open(self.relation_embed_path, 'r', encoding='utf-8') as f:
-                for line in tqdm(f, desc="Reading Relation Embeddings", ncols=100):
-                    parts = line.strip().split('\t')
-                    if len(parts) < 2: continue
-                    key = parts[0]
-                    vector = [float(x) for x in parts[1:]]
-                    self.relation_embedding_dict[key] = vector
-        else:
-            logger.warning(f"Relation embedding file not found: {self.relation_embed_path}")
 
     def get_feature_embedding_idx(self, feature_name: str, feature_value: Any) -> int:
         """

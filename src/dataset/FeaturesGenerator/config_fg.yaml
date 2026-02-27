@@ -17,8 +17,8 @@ features:
     - user_history_clicked_subcategory
     - item_abstract_entity_type
     - item_title_entity_type
-    - item_abstract_entity_vector
-    - item_title_entity_vector
+    - item_abstract_entity_id
+    - item_title_entity_id
   
   item_feature_names:
     - item_id
@@ -26,8 +26,8 @@ features:
     - subcategory
     - item_abstract_entity_type
     - item_title_entity_type
-    - item_abstract_entity_vector
-    - item_title_entity_vector
+    - item_abstract_entity_id
+    - item_title_entity_id
   
   array_feature_names: 
     - user_history
@@ -35,10 +35,9 @@ features:
     - user_history_clicked_subcategory
     - item_abstract_entity_type
     - item_title_entity_type
+    - item_abstract_entity_id
+    - item_title_entity_id
 
-  vector_feature_names:
-    - item_abstract_entity_vector
-    - item_title_entity_vector
 
   share_emb_table_features: # 共享embedding表的特征名称
     user_history: item_id
@@ -52,3 +51,5 @@ features:
     user_history_clicked_subcategory: 100
     item_abstract_entity_type: 10
     item_title_entity_type: 10
+    item_abstract_entity_id: 10
+    item_title_entity_id: 10
