@@ -18,6 +18,7 @@ class FeatureExtractor(FeatureExtractorBase):
         self.user_history_clicked_category_cache = {}
         self.user_history_clicked_subcategory_cache = {}
         self.user_click_subcategory_cache = {}
+        self.user_history_title_entity_id_cache = {}
         
         self.item_abstract_entity_type_cache = {}
         self.item_title_entity_type_cache = {}
@@ -211,6 +212,25 @@ class FeatureExtractor(FeatureExtractorBase):
             
         extracted_features['item_title_entity_id'] = ','.join(entity_ids)
         self.item_title_entity_id_cache[news_id] = extracted_features['item_title_entity_id']
+
+    def feature_extractor_user_history_title_entity_id(self, data_line, extracted_features):  # 提取用户点击历史中的电影标题实体id
+        impression_id = data_line['impression_id']
+        if impression_id in self.user_history_title_entity_id_cache:
+            extracted_features['user_history_title_entity_id'] = self.user_history_title_entity_id_cache[impression_id]
+            return
+
+        user_history = data_line['user_info']['history']
+        history_entity_ids = []
+        for news_id in user_history:
+            news_info = self.item_data_dict.get(news_id, {})
+            title_entities = news_info.get('title_entities', [])
+            for entity in title_entities:
+                entity_vector_id = entity.get('WikidataId', 'UNKNOWN')
+                embedding_idx = self.get_feature_embedding_idx('user_history_title_entity_id', entity_vector_id)
+                history_entity_ids.append(str(embedding_idx))
+        
+        extracted_features['user_history_title_entity_id'] = ','.join(history_entity_ids)
+        self.user_history_cache[impression_id] = extracted_features['user_history_title_entity_id']
 
     # 提取标签，返回一个列表形式
     def label_extractor(self, data_line):

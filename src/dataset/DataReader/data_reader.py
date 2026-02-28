@@ -28,7 +28,6 @@ class DataReader(Dataset):
         self.sparse_features = set(config.features.sparse_feature_names)
         self.dense_features = set(config.features.dense_feature_names)
         self.array_features = set(config.features.array_feature_names)
-        self.vector_features = set(config.features.get('vector_feature_names', []))
         
         # 获取数组特征的最大长度配置
         self.array_max_length = config.features.array_max_length
