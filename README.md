@@ -73,6 +73,11 @@ pip install -r requirements.txt
 *   **[Recall 模型评估指标与逻辑详解](documents/recall_model_metrics.md)**:
     *   针对召回模型 (`BaseModelRecall`)，解析了双塔模型评估流程（全量物品索引 + Top-K 搜索）以及 HR@K, NDCG@K 等召回指标。
 
+### 3.4 脚本工具 (Scripts Usage)
+*   **[脚本工具完整指南](documents/scripts_usage.md)**:
+    *   涵盖 `src/scripts/` 目录下所有工具脚本的使用说明。
+    *   包括 **Pretrain Embedding Table** (预训练权重转换)、**Log Analysis** (日志分析与最佳 Epoch 提取)、**Visualize User History** (用户行为可视化) 以及 **Visualize Recall Result** (召回结果可视化)。
+
 ---
 
 ## 4. 运行流程 (Workflow)
