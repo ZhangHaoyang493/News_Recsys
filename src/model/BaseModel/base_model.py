@@ -123,6 +123,7 @@ class BaseModel(L.LightningModule):
         feature_names: Set[str], 
         embedding_table_size: Dict[str, int], 
         embedding_size: Dict[str, int],
+        pretrain_embedding: Dict[str, str] = {},
         share_emb_table_features: Dict[str, str] = {}
         ) -> nn.ModuleDict:
         tables = nn.ModuleDict()
@@ -132,6 +133,26 @@ class BaseModel(L.LightningModule):
             emb_fname = self._get_emb_feature_name(share_emb_table_features, fname)
             if emb_fname in self.dense_feature_names: continue
             if emb_fname in tables: continue
+            if emb_fname in pretrain_embedding:
+                emb_path = pretrain_embedding[emb_fname]
+                if not os.path.exists(emb_path):
+                    logger.error(f"Pretrained embedding file not found for {emb_fname}: {emb_path}")
+                    raise FileNotFoundError(f"Pretrained embedding file not found for {emb_fname}: {emb_path}")
+                
+                loaded_data = torch.load(emb_path, map_location='cpu')
+                
+                if isinstance(loaded_data, torch.Tensor):
+                    # 如果加载的是 Tensor，则使用 from_pretrained
+                    tables[emb_fname] = nn.Embedding.from_pretrained(loaded_data, freeze=True, padding_idx=0)
+                elif isinstance(loaded_data, nn.Embedding):
+                    # 如果加载的是 nn.Embedding 直接使用
+                    tables[emb_fname] = loaded_data
+                    tables[emb_fname].weight.requires_grad = False
+                else:
+                    raise TypeError(f"Unsupported pretrained embedding type: {type(loaded_data)}")
+                
+                logger.info(f"Loaded pretrained embedding for {emb_fname} from {emb_path}")
+                continue
                 
             size = embedding_table_size.get(emb_fname)
             dim = embedding_size.get(emb_fname)
@@ -149,8 +170,9 @@ class BaseModel(L.LightningModule):
             embedding_dims = table_cfg.get('embedding_dims', {})
             feature_names = set(embedding_dims.keys())
             share_emb_table_features = table_cfg.get('share_emb_table_features', {})
+            pretrain_embedding = table_cfg.get('pretrain_embedding', {})
             
-            tables = self._build_embedding_table(feature_names, self.embedding_table_size, embedding_dims, share_emb_table_features)
+            tables = self._build_embedding_table(feature_names, self.embedding_table_size, embedding_dims, pretrain_embedding, share_emb_table_features)
             self.embedding_tables[table_name] = tables
             self.share_emb_table_features_dict[table_name] = share_emb_table_features
 

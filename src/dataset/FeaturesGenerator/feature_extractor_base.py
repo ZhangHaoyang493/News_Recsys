@@ -64,6 +64,10 @@ class FeatureExtractorBase(ABC):
         # --- 4. 执行初始化流程 ---
         self._validate_config()
         self._resolve_paths()
+        
+        # 尝试加载旧的映射字典
+        self._load_existing_mappings()
+        
         self._prepare_output_dir()
         
         # 加载数据
@@ -101,18 +105,73 @@ class FeatureExtractorBase(ABC):
         if not self.out_basedir:
             raise ValueError("out_basedir is missing in config.")
 
+    def _load_existing_mappings(self):
+        """尝试从最终输出目录加载已存在的映射字典 (增量更新)"""
+        # 此时 self.final_output_feature_dir 已经在 _resolve_paths 中定义
+        val2idx_path = self.final_output_feature_dir / 'original_val_2_embedding_idx_dict.json'
+        # 注意：这里读取的是 embedding_idx_2_original_val_dict.json
+        idx2val_path = self.final_output_feature_dir / 'embedding_idx_2_original_val_dict.json'
+        
+        if val2idx_path.exists() and idx2val_path.exists():
+            logger.info(f"Found existing mapping dictionaries in {self.final_output_feature_dir}. Loading...")
+            try:
+                with open(val2idx_path, 'r', encoding='utf-8') as f:
+                    loaded_val2idx_file = json.load(f)
+                
+                with open(idx2val_path, 'r', encoding='utf-8') as f:
+                    loaded_idx2val_file = json.load(f)
+                
+                # 遍历当前需要的特征名，从文件中加载对应部分
+                for fea in self.feature_names:
+                    # 处理 shared weights (例如 item_id 可能复用 news_id 的映射)
+                    target_map_name = self.share_emb_table_features.get(fea, fea)
+                    
+                    # 1. 加载 Val -> Idx
+                    if target_map_name in loaded_val2idx_file:
+                        data = loaded_val2idx_file[target_map_name]
+                        # 期望格式: [dict, max_idx]
+                        if isinstance(data, list) and len(data) == 2:
+                             self.feature_map_val2idx[target_map_name] = data
+                             current_max = data[1]
+                        elif isinstance(data, dict):
+                             # 兼容旧格式（纯字典）
+                             current_max = max(data.values()) if data else 0
+                             self.feature_map_val2idx[target_map_name] = [data, current_max]
+                        else:
+                             # 异常结构，保持空初始化
+                             logger.warning(f"Unexpected format for {target_map_name} in val2idx file, skipping.")
+                    
+                    # 2. 加载 Idx -> Val
+                    if target_map_name in loaded_idx2val_file:
+                         raw_dict = loaded_idx2val_file[target_map_name]
+                         # JSON key 必须是 str，需要转回 int
+                         self.feature_map_idx2val[target_map_name] = {int(k): v for k, v in raw_dict.items()}
+
+                logger.info(f"Successfully loaded mappings.")
+                
+            except Exception as e:
+                logger.error(f"Failed to load existing mappings: {e}. Starting from scratch.")
+        else:
+            logger.info("No existing mapping dictionaries found. Starting fresh.")
+
     def _resolve_paths(self):
         """解析并组装相关文件路径"""
         preprocess_dir = self.out_basedir / 'preprocess'
         self.item_path = preprocess_dir / 'all_news_preprocess.csv'
         self.train_behavior_path = preprocess_dir / 'train_behaviors_processed.csv'
         self.val_behavior_path = preprocess_dir / 'dev_behaviors_processed.csv'
-        self.output_feature_dir = self.out_basedir / 'extractored_feature'
+        self.entity_embed_path = preprocess_dir / 'entity_embedding_all.vec'
+        self.relation_embed_path = preprocess_dir / 'relation_embedding_all.vec'
+        
+        # 目标正式目录
+        self.final_output_feature_dir = self.out_basedir / 'extractored_feature'
+        # 临时工作目录 (以 _tmp 结尾)，防止运行中断导致原数据丢失
+        self.output_feature_dir = self.out_basedir / 'extractored_feature_tmp'
 
     def _prepare_output_dir(self):
         """准备输出目录，如果存在则清理重建"""
         if self.output_feature_dir.exists():
-            logger.warning(f"Cleaning existing output directory: {self.output_feature_dir}")
+            logger.warning(f"Cleaning existing temporary output directory: {self.output_feature_dir}")
             shutil.rmtree(self.output_feature_dir)
         self.output_feature_dir.mkdir(parents=True, exist_ok=True)
 
@@ -329,6 +388,14 @@ class FeatureExtractorBase(ABC):
         
         # 4. 保存映射表
         self._save_mappings()
+
+        # 5. 原子替换目录 (Atomic Swap)
+        if self.final_output_feature_dir.exists():
+            logger.warning(f"Removing old output directory: {self.final_output_feature_dir}")
+            shutil.rmtree(self.final_output_feature_dir)
+            
+        logger.info(f"Renaming partial directory {self.output_feature_dir} to {self.final_output_feature_dir}")
+        self.output_feature_dir.rename(self.final_output_feature_dir)
         
         logger.info(">>> Pipeline Completed Successfully <<<")
 
