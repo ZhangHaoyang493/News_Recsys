@@ -35,3 +35,4 @@ experiments/
 */*.html
 test.txt
 test.ipynb
+pretrain_embedding
