@@ -179,6 +179,25 @@ class BaseModel(L.LightningModule):
     def _init_metrics_state(self):
         # 基类只初始化容器，具体指标由子类定义
         self.best_metrics = {}
+        # 记录训练损失历史，用于绘图
+        self.train_loss_history = []
+        self.train_step_history = []
+
+    def on_train_batch_end(self, outputs, batch, batch_idx):
+        """每一步结束时记录 Loss"""
+        if outputs is None: return
+        
+        # 获取 Loss 值
+        loss = None
+        if isinstance(outputs, torch.Tensor):
+            loss = outputs.item()
+        elif isinstance(outputs, dict):
+            if 'loss' in outputs:
+                loss = outputs['loss'].item()
+        
+        if loss is not None:
+            self.train_loss_history.append(loss)
+            self.train_step_history.append(self.global_step)
 
     def setup(self, stage: str):
         if self.logger and self.logger.log_dir:
@@ -242,6 +261,29 @@ class BaseModel(L.LightningModule):
                 f.write(log_msg)
         except Exception as e:
             print(f"Failed to write train log: {e}")
+
+        # --- 绘制 Loss 曲线 ---
+        if self.train_loss_history:
+            try:
+                import matplotlib.pyplot as plt
+                
+                loss_fig_dir = os.path.join(self.log_dir, "loss_figure")
+                os.makedirs(loss_fig_dir, exist_ok=True)
+                
+                plt.figure(figsize=(10, 6))
+                plt.plot(self.train_step_history, self.train_loss_history, label='Training Loss')
+                plt.xlabel('Global Step')
+                plt.ylabel('Loss')
+                plt.title(f'Training Loss Curve (Epoch {self.current_epoch})')
+                plt.legend()
+                plt.grid(True)
+                
+                save_path = os.path.join(loss_fig_dir, f"loss_curve_epoch_{self.current_epoch}.png")
+                plt.savefig(save_path)
+                plt.close() # 释放内存
+                logger.info(f"Loss curve saved to {save_path}")
+            except Exception as e:
+                logger.error(f"Failed to plot loss curve: {e}")
 
     def get_feature_embedding(self, embedding_tables_name: str, feature_name: str, feature_value: torch.Tensor) -> torch.Tensor:
         if feature_name in self.dense_feature_names:

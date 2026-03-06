@@ -1,5 +1,10 @@
 # Recall 模型评估指标与逻辑详解
 
+> **⚠️ 注意与说明**：
+> MIND 数据集本质上是一个排序（Ranking/Re-ranking）任务数据集。在 MIND 的 `behaviors.tsv` 中，每条样本已经给定了一个具体的**候选列表**。
+> 本项目主要关注排序层（Deep, DCN, Wide&Deep 等）的研究与优化。
+> **召回层模型（如 DSSM）的实现仅用于全库检索实验的补充，或用于验证双塔模型在有限候选集上的表征能力，而非本项目的核心研究对象。**
+
 本文档详细介绍了 `BaseModelRecall` (`src/model/BaseModel/base_model_recall.py`) 中用于评估召回模型（Retrieval/Matching）性能的逻辑、评估流程及指标定义。
 
 ## 1. 核心职责

@@ -93,6 +93,10 @@ def load_recall_results(result_file, sample_num=100):
 
     data = []
     print(f"Loading recall results from {result_file}...")
+    
+    hit_data = []
+    normal_data = []
+
     with open(result_file, 'r', encoding='utf-8') as f:
         for i, line in enumerate(f):
             parts = line.strip().split('\t')
@@ -109,23 +113,57 @@ def load_recall_results(result_file, sample_num=100):
 
             recall_list = recall_str.split(',') if recall_str else []
             scores_list = scores_str.split(',') if scores_str else []
+            target_list = target_str.split(',') if target_str else []
             
+            # Check for hit (HR=1 logic: at least one target item is in recall items)
+            # Assuming set intersection. ID matching.
+            # Convert to sets for faster lookup
+            recall_set = set(recall_list)
+            is_hit = any(t in recall_set for t in target_list)
+
             # 简单的长度对齐
             if len(scores_list) < len(recall_list):
                  scores_list.extend([""] * (len(recall_list) - len(scores_list)))
 
-            data.append({
+            entry = {
                 'imp_id': imp_id,
                 'user_id': user_id,
                 'recall_list': recall_list,
                 'score_list': scores_list,
-                'target_list': target_str.split(',') if target_str else [],
-                'history_list': history_str.split(',') if history_str else []
-            })
+                'target_list': target_list,
+                'history_list': history_str.split(',') if history_str else [],
+                'is_hit': is_hit
+            }
             
-            if i >= sample_num - 1:
-                break
-    return data
+            if is_hit:
+                hit_data.append(entry)
+            else:
+                normal_data.append(entry)
+    
+            if sample_num > 0:
+                data.append(entry)
+            
+            # Use sample_num broadly or just for normal?
+            # Re-read requirement: "First visualize all hit rate=1 users, then show sample_num data"
+            # It's likely sample_num refers to the "extra" normal data.
+            # But the loop logic above was trying to be memory efficient. Now we read all.
+            # If the file is huge (Millions), reading all is bad.
+            # But "visualize ALL HIT users" implies we must scan the whole file to find hits.
+            pass
+
+    # 1. Extend ALL hits
+    final_data = hit_data
+    print(f"Loaded {len(hit_data)} HIT samples.")
+
+    # 2. Add some normal samples
+    added_count = 0
+    if sample_num > 0:
+        take_num = min(len(normal_data), sample_num)
+        final_data.extend(normal_data[:take_num])
+        added_count = take_num
+        print(f"Added {added_count} normal samples.")
+            
+    return final_data
 
 def generate_html(data, news_map, output_file):
     """生成可视化 HTML"""

@@ -15,7 +15,11 @@
     *   `news.tsv`: 新闻的详细信息（ID, 类别, 子类别, 标题, 摘要, 实体等）。
     *   `behaviors.tsv`: 用户的点击历史和当前印象日志（Impression ID, User ID, Time, History, Impressions）。
 
-
+> **⚠️ 注意与说明**：
+> 虽然本项目提供了基于双塔（DSSM）的召回模型实现，但 **MIND 数据集本质上是一个排序（Ranking/Re-ranking）任务数据集**。
+> - 在 MIND 的 `behaviors.tsv` 中，每条样本已经给定了一个具体的**候选列表**（Impressions），其中包含了正样本（点击）和负样本（未点击）。
+> - 任务目标是对这个给定的列表进行打分排序，而非从全库所有新闻中检索。
+> - 因此，**本项目主要关注排序层（Deep, DCN, Wide&Deep 等）的研究与优化**。召回层模型仅作为完整推荐链路的补充实现或用于特定的全库检索实验，不作为核心评估对象。
 
 ### 数据准备
 请从 [MIND 官方网站](https://msnews.github.io/) 下载 **MIND-small** 数据集，并解压到 `Data/MIND/` 目录下。

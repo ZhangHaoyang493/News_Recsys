@@ -5,6 +5,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Union
+import copy
 
 import pyjson5 as json
 import yaml
@@ -52,6 +53,7 @@ class FeatureExtractorBase(ABC):
         
         # --- 3. 内部状态初始化 ---
         self.item_data_dict: Dict[int, Dict[str, Any]] = {}
+        self.item_extractor_cache: Dict[int, Dict[str, Any]] = {}
         
         # 映射字典: Feature Name -> ({原始值: ID}, 当前最大ID)
         # 结构: {'user_id': ({'u1': 1, 'u2': 2}, 2), ...}
@@ -75,6 +77,9 @@ class FeatureExtractorBase(ABC):
         
         # 子类钩子：用于初始化某些特定的逻辑（如加载预训练词向量等）
         self.initialization()
+        self.initialize_caches_item()
+
+        self.get_user_item_feature_ectractor_func_list() # 获取特征提取函数列表，并根据配置区分用户/物品特征
 
         self.extracted_feature_cache = {}
 
@@ -84,7 +89,12 @@ class FeatureExtractorBase(ABC):
         pass
 
     @abstractmethod
-    def initialize_caches(self):
+    def initialize_caches_user(self):
+        """子类可重写此方法以初始化或清理特征提取过程中使用的缓存"""
+        pass
+    
+    @abstractmethod
+    def initialize_caches_item(self):
         """子类可重写此方法以初始化或清理特征提取过程中使用的缓存"""
         pass
 
@@ -95,6 +105,30 @@ class FeatureExtractorBase(ABC):
         必须在子类中实现
         """
         pass
+
+    def get_user_item_feature_ectractor_func_list(self) -> List:
+        """
+        获取特征提取函数列表，支持一个特征由多个函数提取（如历史行为相关特征）
+        
+        Args:
+            feature_name (str): 特征名称
+            
+        Returns:
+            List[function]: 提取该特征的函数列表
+        """
+        self.user_func_list, self.item_func_list = [], []
+        # 1. 动态调用特征提取函数
+        for fea in self.feature_names:
+            func_name = f"feature_extractor_{fea}"
+            if fea in self.item_feature_names: # 如果缓存中没有这个特征，才调用提取函数（避免重复计算）
+                if not hasattr(self, func_name):
+                    raise NotImplementedError(f"Method '{func_name}' required for feature '{fea}' is not implemented.")
+                self.item_func_list.append(getattr(self, func_name))
+            else:
+                if not hasattr(self, func_name):
+                    raise NotImplementedError(f"Method '{func_name}' required for feature '{fea}' is not implemented.")
+                self.user_func_list.append(getattr(self, func_name))
+        return self.user_func_list, self.item_func_list
 
     def _validate_config(self):
         """验证配置文件的完整性"""
@@ -262,17 +296,21 @@ class FeatureExtractorBase(ABC):
         Returns:
             Tuple[str, str]: (特征字符串, Label字符串)
         """
-        extracted_features = {}
+        news_id = data_context['item_info'].get('news_id', -1)
+        extracted_features = copy.deepcopy(self.item_extractor_cache.get(news_id, {})) # 先尝试从缓存获取静态物品特征
         
         # 1. 动态调用特征提取函数
-        for fea in self.feature_names:
-            func_name = f"feature_extractor_{fea}"
-            if not hasattr(self, func_name):
-                raise NotImplementedError(f"Method '{func_name}' required for feature '{fea}' is not implemented.")
-            
-            extractor_func = getattr(self, func_name)
-            # 这里调用子类实现的具体逻辑，通常会调用 self.get_feature_embedding_idx
-            extractor_func(data_context, extracted_features)
+        # for fea in self.feature_names:
+        #     if fea not in extracted_features: # 如果缓存中没有这个特征，才调用提取函数（避免重复计算）
+        #         func_name = f"feature_extractor_{fea}"
+        #         if not hasattr(self, func_name):
+        #             raise NotImplementedError(f"Method '{func_name}' required for feature '{fea}' is not implemented.")
+                
+        #         extractor_func = getattr(self, func_name)
+        #         # 这里调用子类实现的具体逻辑，通常会调用 self.get_feature_embedding_idx
+        #         extractor_func(data_context, extracted_features)
+        for func in self.user_func_list:  # 用户特征提取函数列表
+            func(data_context, extracted_features)
 
         # 2. 提取 Label
         labels = self.label_extractor(data_context)
@@ -290,7 +328,7 @@ class FeatureExtractorBase(ABC):
             logger.warning(f"File not found: {input_path}")
             return
         
-        self.initialize_caches()
+        self.initialize_caches_user() # 每处理一个行为文件前，重置用户相关的缓存
 
         output_filename = input_path.stem.split('_')[0] + '_features.txt' # e.g., train_features.txt
         output_path = self.output_feature_dir / output_filename
@@ -344,11 +382,17 @@ class FeatureExtractorBase(ABC):
             for _, item_info in tqdm(self.item_data_dict.items(), desc="Extracting Item Feats", ncols=100):
                 extracted = {}
                 # 仅提取 item_feature_names 中定义的特征
-                for fea in self.item_feature_names:
-                    func_name = f"feature_extractor_{fea}"
-                    if hasattr(self, func_name):
-                        getattr(self, func_name)({'item_info': item_info}, extracted)
+                # for fea in self.item_feature_names:
+                #     func_name = f"feature_extractor_{fea}"
+                #     if hasattr(self, func_name):
+                #         getattr(self, func_name)({'item_info': item_info}, extracted)
+
+                for func in self.item_func_list:  # 
+                    func({'item_info': item_info}, extracted)
+
                 
+                news_id = item_info.get('news_id', -1)
+                self.item_extractor_cache[news_id] = copy.deepcopy(extracted) # 缓存提取结果，供后续行为文件处理时使用
                 # 格式化
                 feat_str = ' '.join([f"{k}:{v}" for k, v in extracted.items()])
                 # Item Feature 通常没有 Label，这里用 -1 占位
@@ -373,23 +417,24 @@ class FeatureExtractorBase(ABC):
 
     def run(self):
         """
-        [主入口] 执行完整的特征提取流程
+        [Main Entry] Execute the complete feature extraction pipeline
         """
         logger.info(">>> Starting Feature Extraction Pipeline <<<")
         
-        # 1. 处理训练集
-        self._process_behavior_file(self.train_behavior_path)
-        
-        # 2. 处理验证集
-        self._process_behavior_file(self.val_behavior_path)
-        
-        # 3. 处理物品特征
+        # 1. Extract Item Features First (to build item mappings)
         self._extract_item_features_only()
         
-        # 4. 保存映射表
+        # 2. Save mappings after item extraction (checkpointing)
         self._save_mappings()
 
-        # 5. 原子替换目录 (Atomic Swap)
+        # 3. Process Behaviors (Training & Validation) using the established mappings
+        self._process_behavior_file(self.train_behavior_path)
+        self._process_behavior_file(self.val_behavior_path)
+        
+        # 4. Save final mappings (updating with any new user/context features)
+        self._save_mappings()
+
+        # 5. Atomic Directory Swap
         if self.final_output_feature_dir.exists():
             logger.warning(f"Removing old output directory: {self.final_output_feature_dir}")
             shutil.rmtree(self.final_output_feature_dir)

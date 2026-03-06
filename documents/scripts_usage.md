@@ -49,6 +49,62 @@ python src/scripts/pretrain_embedding_table.py \
 
 ---
 
+## `src/scripts/decode_features.py`
+
+此脚本用于验证特征提取结果的正确性。它将经过数字化编码（Feature Hashing/Indexing）后的特征文件（如 `train_features.txt`）还原为原始的可读文本值。这对于排查数据预处理问题、验证 ID 映射是否正确以及检查 Label 对应关系非常有帮助。
+
+### 功能说明
+1. 读取特征文件（每行包含 Label 和一系列 `feature_name:feature_id`）。
+2. 读取特征提取阶段生成的 `embedding_idx_2_original_val_dict.json` 映射文件。
+3. 读取 `dataset_extract_info.yaml` 获取共享 Embedding 表配置（Shared Embedding）。
+4. 将每个特征的 ID 反向查表，还原为原始字符串。
+5. 将还原后的结果以易读的格式（YAML-like）输出到文本文件。
+
+### 命令行参数
+
+| 参数 | 必选 | 说明 |
+| :--- | :--- | :--- |
+| `--feature_file` | 是 | 特征文件路径 (例如 `src/tmp/extractored_feature/train_features.txt`) |
+| `--mapping_file` | 是 | ID 映射字典文件路径 (`embedding_idx_2_original_val_dict.json`) |
+| `--output_file` | 否 | 解码后结果的保存路径 (默认为 `decoded_features_sample.txt`) |
+| `--config_file` | 否 | 特征提取配置文件路径 (`dataset_extract_info.yaml`)。如果不指定，脚本会尝试在 `mapping_file` 同目录下查找。 |
+| `--num_lines` | 否 | 要解码并输出的行数 (默认为 20)。 |
+
+### 使用示例
+
+假设：
+- 特征文件位于：`src/tmp/extractored_feature/dev_features.txt`
+- 映射字典位于：`src/tmp/extractored_feature/embedding_idx_2_original_val_dict.json`
+- 我们想查看前 50 行数据的原始值
+- 输出到：`decoded_features.txt`
+
+```bash
+python src/scripts/decode_features.py \
+    --feature_file src/tmp/extractored_feature/dev_features.txt \
+    --mapping_file src/tmp/extractored_feature/embedding_idx_2_original_val_dict.json \
+    --output_file decoded_features.txt \
+    --num_lines 50
+```
+
+### 输出示例
+生成的 `decoded_features.txt` 内容如下：
+```text
+Line 1:
+  Label: 0
+  Features:
+    - user_id: U82271 (ID:1)
+    - item_id: N55189 (ID:42)
+    - category: sports (ID:1)
+    - subcategory: football_nfl (ID:23)
+    ...
+```
+
+### 注意事项
+1. **共享 Embedding (Shared Embedding)**: 脚本会尝试加载配置文件来处理共享 Embedding 的特征（例如 `history_item_id` 可能复用 `item_id` 的映射）。如果找不到配置文件，脚本可能无法正确解码共享特征，会显示 `UNKNOWN_ID` 或仅显示 ID。
+2. **未知 ID**: 如果某个 ID 在映射表中不存在（例如 padding 或 OOV），会被标记为 `UNKNOWN_ID`。
+
+---
+
 ## `src/scripts/log_analysis.py`
 
 此脚本用于分析模型训练过程中生成的日志文件，提取验证集指标（如 AUC、NDCG、MRR），并输出最佳 Epoch 的详细性能表现。

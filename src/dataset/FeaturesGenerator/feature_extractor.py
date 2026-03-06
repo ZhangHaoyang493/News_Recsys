@@ -12,14 +12,15 @@ class FeatureExtractor(FeatureExtractorBase):
     def initialization(self):
         pass
 
-    def initialize_caches(self):
+    def initialize_caches_user(self):
         self.user_click_category_cache = {}
         self.user_history_cache = {}
         self.user_history_clicked_category_cache = {}
         self.user_history_clicked_subcategory_cache = {}
         self.user_click_subcategory_cache = {}
         self.user_history_title_entity_id_cache = {}
-        
+    
+    def initialize_caches_item(self):
         self.item_abstract_entity_type_cache = {}
         self.item_title_entity_type_cache = {}
         self.item_abstract_entity_id_cache = {}
@@ -222,15 +223,22 @@ class FeatureExtractor(FeatureExtractorBase):
         user_history = data_line['user_info']['history']
         history_entity_ids = []
         for news_id in user_history:
+            if news_id in self.item_title_entity_id_cache:
+                cached_entity_ids = self.item_title_entity_id_cache[news_id]
+                if cached_entity_ids == '':  # 如果缓存的实体ID列表为空，说明之前处理过但没有实体，直接跳过
+                    continue
+                history_entity_ids.append(cached_entity_ids)
+                continue
             news_info = self.item_data_dict.get(news_id, {})
             title_entities = news_info.get('title_entities', [])
             for entity in title_entities:
                 entity_vector_id = entity.get('WikidataId', 'UNKNOWN')
                 embedding_idx = self.get_feature_embedding_idx('user_history_title_entity_id', entity_vector_id)
                 history_entity_ids.append(str(embedding_idx))
+
         
         extracted_features['user_history_title_entity_id'] = ','.join(history_entity_ids)
-        self.user_history_cache[impression_id] = extracted_features['user_history_title_entity_id']
+        self.user_history_title_entity_id_cache[impression_id] = extracted_features['user_history_title_entity_id']
 
     # 提取标签，返回一个列表形式
     def label_extractor(self, data_line):

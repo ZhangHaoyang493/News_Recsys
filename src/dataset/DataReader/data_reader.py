@@ -89,7 +89,10 @@ class DataReader(Dataset):
 
                 # 解析数组字符串 (假设逗号分隔: "1,2,3")
                 if val_str:
-                    indices = [int(x) for x in val_str.split(',')]
+                    try:
+                        indices = [int(x) for x in val_str.split(',')]
+                    except ValueError:
+                        raise ValueError(f"Array feature '{feature_name}' contains non-integer values: '{val_str}'")
                 else:
                     indices = []
                 

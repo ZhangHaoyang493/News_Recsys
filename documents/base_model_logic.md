@@ -99,14 +99,20 @@ embeddings:
         subcategory: 16       # [270, 16]
         user_click_category: 16 # [18, 16]
       share_emb_table_features: {} # 如果有共享Embedding的需求，在此定义映射关系
+      # 如果有预训练的Embedding，在此配置路径。支持 .pt, .pth, .ckpt (torch.save) 格式
+      # 文件内容可以是 torch.Tensor 或 nn.Embedding
+      pretrain_embedding:    
+        # title_entity_embedding: "pretrain_embedding/title_entity_embedding.ckpt"
 ```
 
 ### 3.2 构建流程与维度计算
 
 1.  **构建 Embedding Table (`_build_all_embedding_tables`)**：
+    *   **关键机制**：模型构建的 Embedding 表完全取决于 `embeddings.embedding_tables.<table_name>.embedding_dims` 下定义的字段键（Keys）。只有出现在 `embedding_dims` 字典中的特征名，`BaseModel` 才会为其初始化 `nn.Embedding` 层。
     *   模型会读取 `base_embedding_table` 下的 `embedding_dims`。
     *   遍历每个特征，使用 `embedding_table_size` 中的大小和配置的维度创建 `nn.Embedding`。
-    *   如果配置了 `share_emb_table_features` (例如 `target_iid: history_iid`)，则 `target_iid` 会复用 `history_iid` 的 Embedding Matrix。
+    *   如果配置了 `pretrain_embedding`，则会尝试使用 `torch.load` 加载指定路径的权重文件。支持的文件内容格式为 `torch.Tensor` 或 `nn.Embedding` 对象。如果加载成功，将直接作为对应特征的 Embedding 层，并自动 freeze（`requires_grad=False`）。此时配置的维度仅作记录，实际维度以加载的权重为准。
+    *   如果配置了 `share_emb_table_features` (例如 `target_iid: history_iid`)，则 `target_iid` 会复用 `history_iid` 的 Embedding Matrix，而不会创建新的 Embedding Layer。
 
 2.  **自动计算输入维度 (`_calculate_input_dim`)**：
     

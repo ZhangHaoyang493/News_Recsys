@@ -50,7 +50,7 @@ if __name__ == "__main__":
     trainer = L.Trainer(
         max_epochs=max_epochs,
         val_check_interval=val_freq,
-        accelerator='cpu',
+        accelerator='gpu',
         devices=1,
         logger=logger,
     )

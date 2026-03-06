@@ -22,8 +22,9 @@ features:
     - user_history_clicked_subcategory
     # - item_abstract_entity_type
     # - item_title_entity_type
-    - item_abstract_entity_id
+    # - item_abstract_entity_id
     - item_title_entity_id
+    - user_history_title_entity_id
 
   item_feature_names:
     - item_id
@@ -31,7 +32,7 @@ features:
     - subcategory
     # - item_abstract_entity_type
     # - item_title_entity_type
-    - item_abstract_entity_id
+    # - item_abstract_entity_id
     - item_title_entity_id
 
   user_feature_names:
@@ -40,6 +41,7 @@ features:
     # - user_history
     - user_history_clicked_category
     - user_history_clicked_subcategory
+    - user_history_title_entity_id
 
     
 
@@ -49,30 +51,35 @@ features:
     user_history_clicked_subcategory: 150
     item_abstract_entity_type: 10
     item_title_entity_type: 10
-    item_abstract_entity_id: 10
+    # item_abstract_entity_id: 10
     item_title_entity_id: 10
+    user_history_title_entity_id: 200
 
 
 embeddings:
   embedding_table_size:
-    user_id: 94058
+    # user_id: 94058
     item_id: 65239
     category: 20
     subcategory: 271
     user_click_category: 19
     # item_abstract_entity_type: 23
     # item_title_entity_type: 23
+    # item_abstract_entity_id: -1
+    item_title_entity_id: -1
+    user_history_title_entity_id: -1
 
   embedding_tables:
     base_embedding_table:
       embedding_dims:
-        user_id: 32 # 16
+        # user_id: 32 # 16
         item_id: 32
         category: 16
         subcategory: 16
         user_click_category: 16
-        item_abstract_entity_id: 100
+        # item_abstract_entity_id: 100
         item_title_entity_id: 100
+        user_history_title_entity_id: 100
         # item_abstract_entity_type: 16
         # item_title_entity_type: 16
       share_emb_table_features: 
@@ -80,13 +87,16 @@ embeddings:
         user_click_category: category
         user_history_clicked_category: category
         user_history_clicked_subcategory: subcategory
+        # item_abstract_entity_id: 100
+        # item_title_entity_id: 100
+        user_history_title_entity_id: item_title_entity_id
       
       pretrain_embedding:
-        item_abstract_entity_id: "/data2/zhy/News_Recsys/pretrain_embedding/abstract_entity_embedding.ckpt"
+        # item_abstract_entity_id: "/data2/zhy/News_Recsys/pretrain_embedding/abstract_entity_embedding.ckpt"
         item_title_entity_id: "/data2/zhy/News_Recsys/pretrain_embedding/title_entity_embedding.ckpt"
 
 dataset:
-  batch_size: 512
+  batch_size: 1024
   num_workers: 4
   pin_memory: true
   only_test_warm_up_user: true
@@ -104,4 +114,4 @@ train_hparams:
   device: "gpu"
   gpus:
     - 2
-  negative_sample_rate: 1
+  negative_sample_rate: 3
