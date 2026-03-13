@@ -129,11 +129,12 @@ make log model=deep
 
 ## 5. 结果 (Results)
 
-正在整理中...
-| Model | AUC | MRR | nDCG@5 | nDCG@10 |
-|-------|-----|-----|--------|---------|
-| Base  | -   | -   | -      | -       |
-| Ours  | -   | -   | -      | -       |
+### 排序模型 (Ranking Models)
+
+| Model | AUC | LogLoss | GAUC | MRR | NDCG@5 | HR@5 | NDCG@10 | HR@10 | Config Path | 备注 |
+|-------|-----|---------|------|-----|--------|------|---------|-------|-------------|------|
+| Deep  | 0.6344 | 0.1665 | 0.6023 | 0.3041 | 0.2533 | 0.4718 | 0.3135 | 0.6635 | [deep_conf.yaml](documents/cfg_record/deep_cfg_1.yaml) |基础的Deep模型|
+| Deep-v1 | 0.6627 | 0.1970 | 0.6302 | 0.3282 | 0.2790 | 0.5200 | 0.3385 | 0.7030 | [deep_conf.yaml](documents/cfg_record/deep_cfg_2.yaml) | 引入序列特征（用户历史item id、用户历史item的category以及用户历史item的subcategory） |
 
 
 ## 数据集迁移说明 (Why MIND?)

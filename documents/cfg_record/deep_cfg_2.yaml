@@ -17,10 +17,6 @@ features:
     - user_history
     - user_history_clicked_category
     - user_history_clicked_subcategory
-    # - user_history_abstract_entity_type
-    # - user_history_title_entity_type
-    # - item_title_entity_type
-    # - item_abstract_entity_type
 
   item_feature_names:
     - item_id
@@ -30,26 +26,19 @@ features:
   user_feature_names:
     - user_id
     - user_click_category
-    - user_history
-    - user_history_clicked_category
-    - user_history_clicked_subcategory
 
   array_max_length:
     user_history: 150
     user_history_clicked_category: 150
     user_history_clicked_subcategory: 150
-    # user_history_abstract_entity_type: 200
-    # user_history_title_entity_type: 200
-    # item_title_entity_type: 10
-    # item_abstract_entity_type: 10
 
 embeddings:
   embedding_table_size:
     user_id: 94058
     item_id: 65239
-    category: 20
-    subcategory: 271
-    user_click_category: 20
+    category: 19
+    subcategory: 270
+    user_click_category: 18
 
   embedding_tables:
     base_embedding_table:

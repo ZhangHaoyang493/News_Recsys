@@ -19,6 +19,8 @@ class FeatureExtractor(FeatureExtractorBase):
         self.user_history_clicked_subcategory_cache = {}
         self.user_click_subcategory_cache = {}
         self.user_history_title_entity_id_cache = {}
+        self.user_history_title_entity_type_cache = {}
+        self.user_history_abstract_entity_type_cache = {}
     
     def initialize_caches_item(self):
         self.item_abstract_entity_type_cache = {}
@@ -239,6 +241,56 @@ class FeatureExtractor(FeatureExtractorBase):
         
         extracted_features['user_history_title_entity_id'] = ','.join(history_entity_ids)
         self.user_history_title_entity_id_cache[impression_id] = extracted_features['user_history_title_entity_id']
+
+    def feature_extractor_user_history_title_entity_type(self, data_line, extracted_features):  # 提取用户点击历史中的电影标题实体类型
+        impression_id = data_line['impression_id']
+        if impression_id in self.user_history_title_entity_type_cache:
+            extracted_features['user_history_title_entity_type'] = self.user_history_title_entity_type_cache[impression_id]
+            return
+
+        user_history = data_line['user_info']['history']
+        history_entity_types = []
+        for news_id in user_history:
+            if news_id in self.item_title_entity_type_cache:
+                cached_entity_types = self.item_title_entity_type_cache[news_id]
+                if cached_entity_types == '':  # 如果缓存的实体类型列表为空，说明之前处理过但没有实体类型，直接跳过
+                    continue
+                history_entity_types.append(cached_entity_types)
+                continue
+            news_info = self.item_data_dict.get(news_id, {})
+            title_entities = news_info.get('title_entities', [])
+            for entity in title_entities:
+                entity_type = entity.get('Type', 'unknown')
+                embedding_idx = self.get_feature_embedding_idx('user_history_title_entity_type', entity_type)
+                history_entity_types.append(str(embedding_idx))
+        
+        extracted_features['user_history_title_entity_type'] = ','.join(history_entity_types)
+        self.user_history_title_entity_type_cache[impression_id] = extracted_features['user_history_title_entity_type']
+
+    def feature_extractor_user_history_abstract_entity_type(self, data_line, extracted_features):  # 提取用户点击历史中的电影摘要实体id
+        impression_id = data_line['impression_id']
+        if impression_id in self.user_history_abstract_entity_type_cache:
+            extracted_features['user_history_abstract_entity_type'] = self.user_history_abstract_entity_type_cache[impression_id]
+            return
+
+        user_history = data_line['user_info']['history']
+        history_entity_types = []
+        for news_id in user_history:
+            if news_id in self.item_abstract_entity_type_cache:
+                cached_entity_types = self.item_abstract_entity_type_cache[news_id]
+                if cached_entity_types == '':  # 如果缓存的实体类型列表为空，说明之前处理过但没有实体类型，直接跳过
+                    continue
+                history_entity_types.append(cached_entity_types)
+                continue
+            news_info = self.item_data_dict.get(news_id, {})
+            abstract_entities = news_info.get('abstract_entities', [])
+            for entity in abstract_entities:
+                entity_type = entity.get('Type', 'unknown')
+                embedding_idx = self.get_feature_embedding_idx('user_history_abstract_entity_type', entity_type)
+                history_entity_types.append(str(embedding_idx))
+        
+        extracted_features['user_history_abstract_entity_type'] = ','.join(history_entity_types)
+        self.user_history_abstract_entity_type_cache[impression_id] = extracted_features['user_history_abstract_entity_type']
 
     # 提取标签，返回一个列表形式
     def label_extractor(self, data_line):

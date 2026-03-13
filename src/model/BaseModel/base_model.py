@@ -10,6 +10,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning.utilities.model_summary import ModelSummary
 
@@ -182,6 +185,7 @@ class BaseModel(L.LightningModule):
         # 记录训练损失历史，用于绘图
         self.train_loss_history = []
         self.train_step_history = []
+        self.val_logloss_history = []
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
         """每一步结束时记录 Loss"""
@@ -245,6 +249,39 @@ class BaseModel(L.LightningModule):
             self.log_file_path = os.path.join(log_dir, 'training_log.log')
             os.makedirs(self.model_save_path, exist_ok=True)
 
+    def _plot_loss_curve(self):
+        if not hasattr(self, 'train_loss_history') or len(self.train_loss_history) == 0:
+            logger.warning(f"No train_loss_history to plot for Epoch {self.current_epoch}.")
+            return
+
+        try:
+            loss_fig_dir = os.path.join(self.log_dir, "loss_figure")
+            os.makedirs(loss_fig_dir, exist_ok=True)
+            
+            plt.figure(figsize=(10, 6))
+            # Plot Training Loss
+            plt.plot(self.train_step_history, self.train_loss_history, label='Training Loss')
+
+            # Plot Validation LogLoss if available
+            if hasattr(self, 'val_logloss_history') and len(self.val_logloss_history) > 0:
+                # Unzip steps and losses
+                val_steps, val_losses = zip(*self.val_logloss_history)
+                plt.plot(val_steps, val_losses, label='Validation LogLoss', marker='o', linestyle='--')
+
+            plt.xlabel('Global Step')
+            plt.ylabel('Loss')
+            plt.title(f'Loss Curve (Epoch {self.current_epoch})')
+            # Move legend to best location
+            plt.legend()
+            plt.grid(True)
+            
+            save_path = os.path.join(loss_fig_dir, f"loss_curve_epoch_{self.current_epoch}_step_{self.global_step}.png")
+            plt.savefig(save_path)
+            plt.close() # Release memory
+            logger.info(f"Loss curve saved to {save_path}")
+        except Exception as e:
+            logger.error(f"Failed to plot loss curve: {e}")
+
     def on_train_epoch_end(self):
         if not self.trainer or not hasattr(self, 'log_dir'): return
         metrics = self.trainer.callback_metrics
@@ -263,27 +300,7 @@ class BaseModel(L.LightningModule):
             print(f"Failed to write train log: {e}")
 
         # --- 绘制 Loss 曲线 ---
-        if self.train_loss_history:
-            try:
-                import matplotlib.pyplot as plt
-                
-                loss_fig_dir = os.path.join(self.log_dir, "loss_figure")
-                os.makedirs(loss_fig_dir, exist_ok=True)
-                
-                plt.figure(figsize=(10, 6))
-                plt.plot(self.train_step_history, self.train_loss_history, label='Training Loss')
-                plt.xlabel('Global Step')
-                plt.ylabel('Loss')
-                plt.title(f'Training Loss Curve (Epoch {self.current_epoch})')
-                plt.legend()
-                plt.grid(True)
-                
-                save_path = os.path.join(loss_fig_dir, f"loss_curve_epoch_{self.current_epoch}.png")
-                plt.savefig(save_path)
-                plt.close() # 释放内存
-                logger.info(f"Loss curve saved to {save_path}")
-            except Exception as e:
-                logger.error(f"Failed to plot loss curve: {e}")
+        self._plot_loss_curve()
 
     def get_feature_embedding(self, embedding_tables_name: str, feature_name: str, feature_value: torch.Tensor) -> torch.Tensor:
         if feature_name in self.dense_feature_names:

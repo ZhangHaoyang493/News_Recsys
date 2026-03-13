@@ -37,6 +37,9 @@ if __name__ == "__main__":
     name = model.config.get('name', 'default_experiment')
     max_epochs = model.train_hparams.get('max_epoch', 10)
     val_freq = model.train_hparams.get('val_freq', 1)
+    
+    # 获取设备配置
+    devices = model.train_hparams.get('gpus', [0])
 
     # 1. 自定义 Logger
     time_str = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -50,7 +53,7 @@ if __name__ == "__main__":
         max_epochs=max_epochs,
         val_check_interval=val_freq,
         accelerator='gpu',
-        devices=1,
+        devices=devices,
         logger=logger,
     )
 
