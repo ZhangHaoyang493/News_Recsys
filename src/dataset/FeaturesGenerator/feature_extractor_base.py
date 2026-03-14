@@ -50,6 +50,8 @@ class FeatureExtractorBase(ABC):
         self.share_emb_table_features: Dict[str, str] = self.features_cfg.get('share_emb_table_features', {})
         self.array_max_length: Dict[str, int] = self.features_cfg.get('array_max_length', {})
         self.array_feature_names: List[str] = self.features_cfg.get('array_feature_names', [])
+        self.run_mode: str = str(getattr(config, "run_mode", "normal")).lower()
+        self.debug_max_rows: int = int(getattr(config, "debug_max_rows", 100000))
         
         # --- 3. 内部状态初始化 ---
         self.item_data_dict: Dict[int, Dict[str, Any]] = {}
@@ -332,13 +334,19 @@ class FeatureExtractorBase(ABC):
 
         output_filename = input_path.stem.split('_')[0] + '_features.txt' # e.g., train_features.txt
         output_path = self.output_feature_dir / output_filename
+        max_rows = self.debug_max_rows if self.run_mode == "debug" else None
         
-        logger.info(f"Processing behaviors: {input_path} -> {output_path}")
+        logger.info(
+            f"Processing behaviors: {input_path} -> {output_path}, "
+            f"mode={self.run_mode}, max_rows={max_rows}"
+        )
 
         with open(input_path, 'r', encoding='utf-8') as fin, \
              open(output_path, 'w', encoding='utf-8') as fout:
-            
+            row_count = 0
             for line in tqdm(fin, desc=f"Extracting {input_path.stem}", ncols=100):
+                if max_rows is not None and row_count >= max_rows:
+                    break
                 try:
                     # 解析原始行
                     parts = line.strip().split('\t')
@@ -368,6 +376,7 @@ class FeatureExtractorBase(ABC):
                     # 提取特征
                     feat_str, label_str = self._extract_single_row(data_context)
                     fout.write(f"{feat_str}\t{label_str}\n")
+                    row_count += 1
                     
                 except Exception as e:
                     logger.error(f"Error processing line: {line[:50]}... Error: {e}")
@@ -434,13 +443,18 @@ class FeatureExtractorBase(ABC):
         # 4. Save final mappings (updating with any new user/context features)
         self._save_mappings()
 
-        # 5. Atomic Directory Swap
-        if self.final_output_feature_dir.exists():
-            logger.warning(f"Removing old output directory: {self.final_output_feature_dir}")
-            shutil.rmtree(self.final_output_feature_dir)
-            
-        logger.info(f"Renaming partial directory {self.output_feature_dir} to {self.final_output_feature_dir}")
-        self.output_feature_dir.rename(self.final_output_feature_dir)
+        # 5. Atomic Directory Swap (仅 normal 模式执行)
+        if self.run_mode == "normal":
+            if self.final_output_feature_dir.exists():
+                logger.warning(f"Removing old output directory: {self.final_output_feature_dir}")
+                shutil.rmtree(self.final_output_feature_dir)
+            logger.info(f"Renaming partial directory {self.output_feature_dir} to {self.final_output_feature_dir}")
+            self.output_feature_dir.rename(self.final_output_feature_dir)
+        else:
+            logger.info(
+                f"Debug mode detected: keep temporary output at {self.output_feature_dir}, "
+                f"skip renaming to {self.final_output_feature_dir}"
+            )
         
         logger.info(">>> Pipeline Completed Successfully <<<")
 
@@ -458,4 +472,3 @@ class FeatureExtractorBase(ABC):
 #     def feature_extractor_movie_id(self, context, output_dict):
 #         # ... 实现逻辑
 #         pass
-

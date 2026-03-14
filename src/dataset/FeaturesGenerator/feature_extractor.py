@@ -303,10 +303,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Feature Extractor")
     parser.add_argument('-c', '--config', type=str, required=True, help='Path to the config file')
+    parser.add_argument('--mode', type=str, default='normal', choices=['normal', 'debug'], help='Run mode: normal or debug')
     args = parser.parse_args()
 
     # 加载配置文件
     config = OmegaConf.load(args.config)
+    config.run_mode = args.mode
 
     # 初始化FeatureExtractor
     feature_extractor = FeatureExtractor(config)

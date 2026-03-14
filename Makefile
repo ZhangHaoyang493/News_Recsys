@@ -17,8 +17,9 @@ clean:
 
 # 特征提取
 .PHONY: fe
+mode ?= normal
 fe:
-	python -m src.dataset.FeaturesGenerator.feature_extractor -c src/dataset/FeaturesGenerator/config_fg.yaml
+	python -m src.dataset.FeaturesGenerator.feature_extractor -c src/dataset/FeaturesGenerator/config_fg.yaml --mode $(mode)
 
 # 训练排序模型，指令示例: make train model=deep
 .PHONY: train
