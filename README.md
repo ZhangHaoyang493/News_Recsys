@@ -95,7 +95,6 @@ make preprocess
 ```
 配置文件：`src/dataset/FeaturesGenerator/config_fg.yaml`
 
-### 3.2 特征提取 (Feature Extraction)
 ### 4.2 特征提取 (Feature Extraction)
 基于预处理数据提取模型特征：
 ```bash
@@ -103,8 +102,20 @@ make fe
 ```
 配置文件：`src/dataset/FeaturesGenerator/config_fg.yaml`
 
+### 4.3 txt 特征转 npz (Feature TXT to NPZ)
+将 `src/tmp/extractored_feature` 下的 `train_features.txt`、`dev_features.txt`、`item_features.txt` 转为对应的 `.npz` 文件：
+```bash
+make fe_npz
+```
+默认会生成：
+- `src/tmp/extractored_feature/train_features.npz`
+- `src/tmp/extractored_feature/dev_features.npz`
+- `src/tmp/extractored_feature/item_features.npz`
 
-### 4.3 模型训练 (Training)
+> 说明：当前 `BaseModel` 训练链路仍使用 txt 特征读取（`DataReader`），尚未支持直接使用 npz 进行训练。  
+> 即：`make fe_npz` 目前主要用于离线转换与后续加速改造准备，该能力仍待完善。
+
+### 4.4 模型训练 (Training)
 指定模型名称进行训练。`model` 参数对应 `src/model/` (retrieval/sort) 下的模型文件夹名称。
 
 示例（训练 deep 模型）：
@@ -115,13 +126,13 @@ make train stage=sort model=deep
 
 stage 参数可选 `retrieval` 或 `sort`，分别对应召回层和排序层的训练。
 
-### 4.4 日志分析 (Log Analysis)
+### 4.5 日志分析 (Log Analysis)
 自动寻找并分析指定模型最近一次实验的验证集日志，并打印出效果最好的那一次结果。
 ```bash
 make log model=deep
 ```
 
-### 4.5 辅助工具 (Utility)
+### 4.6 辅助工具 (Utility)
 *   **可视化用户历史**: `make visualize_history`
 *   **召回结果可视化**: `make vis_recall` (需指定 path 参数)
 *   **清理临时文件**: `make clean`

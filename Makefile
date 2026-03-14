@@ -21,6 +21,11 @@ mode ?= normal
 fe:
 	python -m src.dataset.FeaturesGenerator.feature_extractor -c src/dataset/FeaturesGenerator/config_fg.yaml --mode $(mode)
 
+# 将提取后的 txt 特征转为 npz（独立步骤）
+.PHONY: fe_npz
+fe_npz:
+	python -m src.dataset.FeaturesGenerator.txt2npz_converter -c src/dataset/FeaturesGenerator/config_fg.yaml --feature_dir src/tmp/extractored_feature
+
 # 训练排序模型，指令示例: make train model=deep
 .PHONY: train
 train:
