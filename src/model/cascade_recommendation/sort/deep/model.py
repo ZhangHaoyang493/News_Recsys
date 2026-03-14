@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from ....BaseModel.base_model_sort import BaseModelSort
 from ....model_utils.lr_schedule import CosinDecayLR
 from ....model_utils.utils import MLP
-from sklearn.metrics import roc_auc_score
 
 class DeepModel(nn.Module):
     def __init__(self, input_dim, hidden_dims=[32, 32, 1]):
@@ -46,9 +45,7 @@ class Deep(BaseModelSort):
         scores = self.forward(batch)
         labels = batch['label'][:, 0]  # 获取是否喜欢的标签
         loss = self.bceLoss(scores, labels)  # 计算二元交叉熵损失
-        train_auc = roc_auc_score(labels.cpu().numpy(), scores.detach().cpu().numpy())
         self.log('train_loss', loss, prog_bar=True, on_epoch=True, on_step=False)
-        self.log('train_auc', train_auc, prog_bar=True, on_step=False, on_epoch=True)
         return loss
     
     def configure_optimizers(self):
@@ -68,4 +65,3 @@ class Deep(BaseModelSort):
     def inference(self, batch):
         inp_feature = self.get_inp_embedding(batch)  # 获取输入特征向量
         return self.score_fc(inp_feature)  # 返回预测分数
-

@@ -187,6 +187,22 @@ class BaseModel(L.LightningModule):
         self.train_step_history = []
         self.val_logloss_history = []
 
+    def _format_feature_name_log_section(self) -> str:
+        """格式化当前模型实际使用的 user/item 特征名称列表。"""
+        user_features = sorted(self.user_feature_names)
+        item_features = sorted(self.item_feature_names)
+
+        lines = [
+            "Feature Names Used By Model:",
+            f"  User Feature Names (count={len(user_features)}):",
+        ]
+        lines.extend([f"    - {fname}" for fname in user_features])
+
+        lines.append(f"  Item Feature Names (count={len(item_features)}):")
+        lines.extend([f"    - {fname}" for fname in item_features])
+        lines.append("")
+        return "\n".join(lines)
+
     def on_train_batch_end(self, outputs, batch, batch_idx):
         """每一步结束时记录 Loss"""
         if outputs is None: return
@@ -240,7 +256,8 @@ class BaseModel(L.LightningModule):
         if self.trainer.is_global_zero:
             summary = ModelSummary(self, max_depth=3)
             with open(os.path.join(self.log_dir, 'model_info.log'), "w") as f:
-                f.write('\n' + str(summary) + '\n') 
+                f.write('\n' + str(summary) + '\n')
+                f.write(self._format_feature_name_log_section())
 
     def on_train_start(self):
         if self.logger:
@@ -330,11 +347,16 @@ class BaseModel(L.LightningModule):
             if fname not in batch:
                 logger.error(f"Feature '{fname}' not found in batch.")
                 raise ValueError(f"Feature '{fname}' not found in batch.")
-            
+
+            mask = None
+            val = batch[fname]
             if fname in self.array_feature_names:
                 mask = batch.get(f"{fname}_mask", None)
+                if mask is None:
+                    raise ValueError(f"Array feature '{fname}' requires '{fname}_mask' in batch.")
+                # DataReader pads array features with -1; map padding positions to 0 (embedding padding_idx).
+                val = torch.clamp(val, min=0)
 
-            val = batch[fname] if not (fname in self.array_feature_names) else batch[fname] * mask
             emb = self.get_feature_embedding(embedding_tables_name, fname, val)
             
             if fname in self.array_feature_names:

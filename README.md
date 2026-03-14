@@ -135,6 +135,7 @@ make log model=deep
 |-------|-----|---------|------|-----|--------|------|---------|-------|-------------|------|
 | Deep  | 0.6344 | 0.1665 | 0.6023 | 0.3041 | 0.2533 | 0.4718 | 0.3135 | 0.6635 | [deep_conf.yaml](documents/cfg_record/deep_cfg_1.yaml) |基础的Deep模型|
 | Deep-v1 | 0.6627 | 0.1970 | 0.6302 | 0.3282 | 0.2790 | 0.5200 | 0.3385 | 0.7030 | [deep_conf.yaml](documents/cfg_record/deep_cfg_2.yaml) | 引入序列特征（用户历史item id、用户历史item的category以及用户历史item的subcategory） |
+| Deep-v2 | 0.6720 | 0.1638 | 0.6306 | 0.3423 | 0.2889 | 0.5293 | 0.3478 | 0.7089 | [deep_conf.yaml](documents/cfg_record/deep_cfg_3.yaml) | 在 Deep-v1 的基础上增加了数据集中预训练的title的embedding特征 |
 
 
 ## 数据集迁移说明 (Why MIND?)

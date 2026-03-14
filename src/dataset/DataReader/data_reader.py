@@ -106,8 +106,8 @@ class DataReader(Dataset):
                     # Mask: 真实数据为1，Padding为0
                     mask = [1.0] * seq_len + [0.0] * pad_len
                 else:
-                    # 长度超出：截断
-                    indices = indices[:max_len]
+                    # 长度超出：保留最近的 max_len 个
+                    indices = indices[-max_len:]
                     mask = [1.0] * max_len
 
                 # 转为 Tensor
