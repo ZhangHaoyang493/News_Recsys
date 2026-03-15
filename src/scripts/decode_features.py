@@ -4,7 +4,6 @@ import json
 import argparse
 import yaml
 from pathlib import Path
-from tqdm import tqdm
 
 def load_json(path):
     with open(path, 'r', encoding='utf-8') as f:
@@ -16,17 +15,21 @@ def load_yaml(path):
 
 def main():
     parser = argparse.ArgumentParser(description="Decode feature indices to original values for verification.")
-    parser.add_argument('--feature_file', type=str, required=True, help="Path to the feature file (e.g., train_features.txt)")
-    parser.add_argument('--mapping_file', type=str, required=True, help="Path to embedding_idx_2_original_val_dict.json")
-    parser.add_argument('--config_file', type=str, default=None, help="Path to dataset_extract_info.yaml. If not provided, looks in the mapping_file directory.")
-    parser.add_argument('--output_file', type=str, default="decoded_features_sample.txt", help="Path to save the decoded output.")
-    parser.add_argument('--num_lines', type=int, default=20, help="Number of lines to decode.")
+    parser.add_argument('-f', '--feature_file', type=str, required=True, help="Path to the feature file (e.g., train_features.txt)")
+    parser.add_argument('-m', '--mapping_file', type=str, required=True, help="Path to embedding_idx_2_original_val_dict.json")
+    parser.add_argument('-c', '--config_file', type=str, default=None, help="Path to dataset_extract_info.yaml. If not provided, looks in the mapping_file directory.")
+    parser.add_argument('-s', '--start_line', type=int, default=1, help="1-based line number to start decoding from.")
+    parser.add_argument('-n', '--num_lines', type=int, default=20, help="Number of lines to decode.")
     
     args = parser.parse_args()
     
     feature_path = Path(args.feature_file)
     mapping_path = Path(args.mapping_file)
-    output_path = Path(args.output_file)
+
+    if args.start_line < 1:
+        raise ValueError("--start_line must be >= 1")
+    if args.num_lines < 1:
+        raise ValueError("--num_lines must be >= 1")
     
     # 1. Load Mappings
     print(f"Loading mappings from {mapping_path}...")
@@ -35,6 +38,7 @@ def main():
     idx2val = {}
     for feat_name, mapping in idx2val_raw.items():
         idx2val[feat_name] = {int(k): v for k, v in mapping.items()}
+    passthrough_id_maps = {"impression_id", "user_id", "item_id"}
 
     # 2. Load Config for Shared Embeddings
     config_path = args.config_file
@@ -58,13 +62,16 @@ def main():
         print("Warning: Config file not found. Shared features might not be decoded correctly.")
 
     # 3. Process Check
-    print(f"Decoding first {args.num_lines} lines from {feature_path}...")
-    
-    with open(feature_path, 'r', encoding='utf-8') as fin, \
-         open(output_path, 'w', encoding='utf-8') as fout:
-        
+    end_line = args.start_line + args.num_lines - 1
+    print(f"Decoding lines [{args.start_line}, {end_line}] from {feature_path}...")
+
+    decoded_count = 0
+    with open(feature_path, 'r', encoding='utf-8') as fin:
         for i, line in enumerate(fin):
-            if i >= args.num_lines:
+            line_no = i + 1
+            if line_no < args.start_line:
+                continue
+            if decoded_count >= args.num_lines:
                 break
                 
             parts = line.strip().split('\t')
@@ -84,34 +91,60 @@ def main():
                 # but standard is key:value.
                 # Assuming key:value
                 key, val_str = item.rsplit(':', 1)
-                
-                try:
-                    val_idx = int(val_str)
-                except ValueError:
-                    decoded_features[key] = f"{val_str} (RAW)"
-                    continue
-                
+
                 # Determine referencing map name
                 map_name = share_map.get(key, key)
-                
-                decoded_val = None
-                if map_name in idx2val:
-                    decoded_val = idx2val[map_name].get(val_idx)
-                
-                if decoded_val is not None:
-                    decoded_features[key] = f"{decoded_val} (ID:{val_idx})"
-                else:
-                    decoded_features[key] = f"UNKNOWN_ID:{val_idx}"
-            
-            # Write to output
-            fout.write(f"Line {i+1}:\n")
-            fout.write(f"  Label: {label_part}\n")
-            fout.write(f"  Features:\n")
-            for k, v in decoded_features.items():
-                fout.write(f"    - {k}: {v}\n")
-            fout.write("-" * 40 + "\n")
 
-    print(f"Done. Decoded results saved to {output_path}")
+                # 数组特征：形如 "1,2,3"。逐个反查成明文。
+                if "," in val_str:
+                    raw_tokens = [tok for tok in val_str.split(",") if tok != ""]
+                    decoded_tokens = []
+                    for tok in raw_tokens:
+                        try:
+                            tok_idx = int(tok)
+                        except ValueError:
+                            decoded_tokens.append(f"{tok} (RAW)")
+                            continue
+
+                        decoded_tok = None
+                        if map_name in idx2val:
+                            decoded_tok = idx2val[map_name].get(tok_idx)
+                        if decoded_tok is not None:
+                            decoded_tokens.append(f"{decoded_tok} (ID:{tok_idx})")
+                        elif map_name in passthrough_id_maps:
+                            decoded_tokens.append(f"{tok_idx} (ID:{tok_idx})")
+                        else:
+                            decoded_tokens.append(f"UNKNOWN_ID:{tok_idx}")
+
+                    decoded_features[key] = "[" + ", ".join(decoded_tokens) + "]"
+                else:
+                    # 标量特征：保持原逻辑
+                    try:
+                        val_idx = int(val_str)
+                    except ValueError:
+                        decoded_features[key] = f"{val_str} (RAW)"
+                        continue
+
+                    decoded_val = None
+                    if map_name in idx2val:
+                        decoded_val = idx2val[map_name].get(val_idx)
+
+                    if decoded_val is not None:
+                        decoded_features[key] = f"{decoded_val} (ID:{val_idx})"
+                    elif map_name in passthrough_id_maps:
+                        decoded_features[key] = f"{val_idx} (ID:{val_idx})"
+                    else:
+                        decoded_features[key] = f"UNKNOWN_ID:{val_idx}"
+            
+            print(f"Line {line_no}:")
+            print(f"  Label: {label_part}")
+            print("  Features:")
+            for k, v in decoded_features.items():
+                print(f"    - {k}: {v}")
+            print("-" * 40)
+            decoded_count += 1
+
+    print(f"Done. Printed {decoded_count} decoded lines.")
 
 if __name__ == "__main__":
     main()

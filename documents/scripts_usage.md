@@ -58,38 +58,37 @@ python src/scripts/pretrain_embedding_table.py \
 2. 读取特征提取阶段生成的 `embedding_idx_2_original_val_dict.json` 映射文件。
 3. 读取 `dataset_extract_info.yaml` 获取共享 Embedding 表配置（Shared Embedding）。
 4. 将每个特征的 ID 反向查表，还原为原始字符串。
-5. 将还原后的结果以易读的格式（YAML-like）输出到文本文件。
+5. 将还原后的结果直接打印到命令行（不再写入文件）。
 
 ### 命令行参数
 
 | 参数 | 必选 | 说明 |
 | :--- | :--- | :--- |
-| `--feature_file` | 是 | 特征文件路径 (例如 `src/tmp/extractored_feature/train_features.txt`) |
-| `--mapping_file` | 是 | ID 映射字典文件路径 (`embedding_idx_2_original_val_dict.json`) |
-| `--output_file` | 否 | 解码后结果的保存路径 (默认为 `decoded_features_sample.txt`) |
-| `--config_file` | 否 | 特征提取配置文件路径 (`dataset_extract_info.yaml`)。如果不指定，脚本会尝试在 `mapping_file` 同目录下查找。 |
-| `--num_lines` | 否 | 要解码并输出的行数 (默认为 20)。 |
+| `-f` / `--feature_file` | 是 | 特征文件路径 (例如 `src/tmp/extractored_feature/train_features.txt`) |
+| `-m` / `--mapping_file` | 是 | ID 映射字典文件路径 (`embedding_idx_2_original_val_dict.json`) |
+| `-c` / `--config_file` | 否 | 特征提取配置文件路径 (`dataset_extract_info.yaml`)。如果不指定，脚本会尝试在 `mapping_file` 同目录下查找。 |
+| `-s` / `--start_line` | 否 | 从第几行开始解码（1-based，默认为 1）。 |
+| `-n` / `--num_lines` | 否 | 连续解码多少行（默认为 20）。 |
 
 ### 使用示例
 
 假设：
 - 特征文件位于：`src/tmp/extractored_feature/dev_features.txt`
 - 映射字典位于：`src/tmp/extractored_feature/embedding_idx_2_original_val_dict.json`
-- 我们想查看前 50 行数据的原始值
-- 输出到：`decoded_features.txt`
+- 我们想从第 100 行开始查看连续 50 行的原始值
 
 ```bash
 python src/scripts/decode_features.py \
-    --feature_file src/tmp/extractored_feature/dev_features.txt \
-    --mapping_file src/tmp/extractored_feature/embedding_idx_2_original_val_dict.json \
-    --output_file decoded_features.txt \
-    --num_lines 50
+    -f src/tmp/extractored_feature/dev_features.txt \
+    -m src/tmp/extractored_feature/embedding_idx_2_original_val_dict.json \
+    -s 100 \
+    -n 50
 ```
 
 ### 输出示例
-生成的 `decoded_features.txt` 内容如下：
+命令行会直接打印如下内容：
 ```text
-Line 1:
+Line 100:
   Label: 0
   Features:
     - user_id: U82271 (ID:1)
@@ -102,32 +101,62 @@ Line 1:
 ### 注意事项
 1. **共享 Embedding (Shared Embedding)**: 脚本会尝试加载配置文件来处理共享 Embedding 的特征（例如 `history_item_id` 可能复用 `item_id` 的映射）。如果找不到配置文件，脚本可能无法正确解码共享特征，会显示 `UNKNOWN_ID` 或仅显示 ID。
 2. **未知 ID**: 如果某个 ID 在映射表中不存在（例如 padding 或 OOV），会被标记为 `UNKNOWN_ID`。
+3. **行号规则**: `--start_line` 是 1-based（第一行是 1），并且实际打印条数最多为 `--num_lines`，若文件剩余行不足则按剩余行输出。
 
 ---
 
-## `src/scripts/log_analysis.py`
+## `src/scripts/decode_features_mmap.py`
 
-此脚本用于分析模型训练过程中生成的日志文件，提取验证集指标（如 AUC、NDCG、MRR），并输出最佳 Epoch 的详细性能表现。
+此脚本用于验证 mmap 特征数据的正确性。它从 `*_features_mmap` 目录读取 `manifest.json` 和 `part_000001/*.npy`，并将编码后的特征 ID 还原为可读明文，直接打印到命令行。
 
 ### 功能说明
-1. 解析日志文件，识别 Epoch 分隔符。
-2. 提取 `Overall`、`Warm Start Users` 和 `Cold Start Users` 三个部分的指标数据。
-3. 根据 **Warm Start Users 的 AUC** 指标自动挑选最佳 Epoch。
-4. 以 Markdown 表格形式打印该 Epoch 下的所有指标详情。
+1. 读取 mmap 特征目录（如 `train_features_mmap`）。
+2. 读取 `embedding_idx_2_original_val_dict.json` 映射文件。
+3. 读取 `dataset_extract_info.yaml` 获取共享 Embedding 映射关系。
+4. 支持标量和数组特征解码（数组优先结合 `*_mask.npy` 解码有效位）。
+5. 支持从第 m 行开始，连续解码 n 行，并直接打印结果。
+6. 对 `impression_id`、`user_id`、`item_id` 及共享到这三者的特征，若无映射明文则直接输出 ID 本身（不显示 `UNKNOWN_ID`）。
 
 ### 命令行参数
 
 | 参数 | 必选 | 说明 |
 | :--- | :--- | :--- |
-| `log_file` | 是 | 训练日志文件的路径 (例如 `experiments/model_date/log.txt`) |
+| `-f` / `--feature_file` | 是 | mmap 特征目录路径（例如 `src/tmp/extractored_feature/train_features_mmap`） |
+| `-m` / `--mapping_file` | 是 | ID 映射字典文件路径 (`embedding_idx_2_original_val_dict.json`) |
+| `-c` / `--config_file` | 否 | 配置文件路径 (`dataset_extract_info.yaml`)。不指定时会尝试在 `mapping_file` 同目录查找。 |
+| `-s` / `--start_line` | 否 | 从第几行开始解码（1-based，默认为 1）。 |
+| `-n` / `--num_lines` | 否 | 连续解码多少行（默认为 20）。 |
 
 ### 使用示例
 
 ```bash
-python src/scripts/log_analysis.py experiments/dssm_20260228-112055/train.log
+python src/scripts/decode_features_mmap.py \
+    -f src/tmp/extractored_feature/train_features_mmap \
+    -m src/tmp/extractored_feature/embedding_idx_2_original_val_dict.json \
+    -s 100 \
+    -n 50
 ```
 
+### 输出示例
+
+```text
+Line 100:
+  Label: 0.0
+  Features:
+    - user_id: 12345 (ID:12345)
+    - category: sports (ID:2)
+    - user_history_clicked_category: [sports (ID:2), news (ID:3)]
+    ...
+```
+
+### 注意事项
+1. 当前脚本按单 part 读取（`part_000001`），与当前项目的 mmap 产物约定一致。
+2. `--start_line` 为 1-based；若超过总行数会直接提示并退出。
+3. 若配置文件缺失，共享 Embedding 特征可能无法准确解码。
+
 ---
+
+
 
 ## `src/scripts/visiualize_user_history.py`
 
