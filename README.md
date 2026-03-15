@@ -102,18 +102,22 @@ make fe
 ```
 配置文件：`src/dataset/FeaturesGenerator/config_fg.yaml`
 
-### 4.3 txt 特征转 npz (Feature TXT to NPZ)
-将 `src/tmp/extractored_feature` 下的 `train_features.txt`、`dev_features.txt`、`item_features.txt` 转为对应的 `.npz` 文件：
+### 4.3 txt 特征转 mmap (Feature TXT to MMAP)
+将 `src/tmp/extractored_feature` 下的 `train_features.txt`、`dev_features.txt`、`item_features.txt` 转为 mmap 友好的目录格式：
 ```bash
 make fe_npz
 ```
 默认会生成：
-- `src/tmp/extractored_feature/train_features.npz`
-- `src/tmp/extractored_feature/dev_features.npz`
-- `src/tmp/extractored_feature/item_features.npz`
+- `src/tmp/extractored_feature/train_features_mmap/`
+- `src/tmp/extractored_feature/dev_features_mmap/`
+- `src/tmp/extractored_feature/item_features_mmap/`
 
-> 说明：当前 `BaseModel` 训练链路仍使用 txt 特征读取（`DataReader`），尚未支持直接使用 npz 进行训练。  
-> 即：`make fe_npz` 目前主要用于离线转换与后续加速改造准备，该能力仍待完善。
+每个目录内包含：
+- `manifest.json`
+- `part_000001/`
+- `part_000001/*.npy`（按列存储的特征与 `label.npy`）
+
+> 说明：`make fe_npz` 命令名保留历史命名，但当前实际生成的是 mmap 目录格式（不是单文件 `.npz`）。
 
 ### 4.4 模型训练 (Training)
 指定模型名称进行训练。`model` 参数对应 `src/model/` (retrieval/sort) 下的模型文件夹名称。
@@ -125,6 +129,41 @@ make train stage=sort model=deep
 配置文件：`src/model/cascade_recommendation/sort/deep/deep_conf.yaml`
 
 stage 参数可选 `retrieval` 或 `sort`，分别对应召回层和排序层的训练。
+
+#### 4.4.1 训练数据读取模式切换（txt / mmap）
+通过配置项 `dataset.load_npz` 控制训练读取方式：
+- `false`：使用 txt 读取（`DataReader`），读取 `train_features.txt/dev_features.txt/item_features.txt`
+- `true`：使用 mmap 读取（`DataReaderMmap`），读取 `train_features_mmap/dev_features_mmap/item_features_mmap`
+
+配置位置示例：
+- `src/model/cascade_recommendation/sort/base_sort_conf.yaml`
+
+推荐流程：
+1. `make preprocess`
+2. `make fe`
+3. 若需要 mmap 训练，再执行 `make fe_npz`
+4. 设置 `dataset.load_npz=true`
+5. `make train stage=sort model=deep`
+
+如果你希望回退到 txt 训练：
+1. 设置 `dataset.load_npz=false`
+2. 直接运行 `make train stage=sort model=deep`
+
+> 当前代码库已同时支持 txt 训练与 mmap 训练。  
+> 在样本规模较大、I/O 成为瓶颈时，优先尝试 mmap 训练链路。
+
+#### 4.4.2 为什么需要 mmap 训练
+在大规模样本下，txt 训练链路常见瓶颈是“数据读取与解析”而不是“模型前向/反向”本身。  
+引入 mmap 训练的主要原因：
+
+- 减少运行时解析开销：txt 训练需要频繁执行字符串切分、`str->int` 转换、数组字段解析与补齐；mmap 方案将这些前置到离线转换阶段。
+- 降低 Python 层 CPU 压力：训练过程中直接读取二进制数组，减少 Python 文本处理逻辑。
+- 改善随机访问效率：mmap 基于按需分页读取，通常比反复解析文本更适合训练阶段的高频访问。
+- 提升训练稳定性：数据格式固定后，线上训练路径更简单，异常点更少，便于排查性能问题。
+
+适用建议：
+- 当你观察到 GPU 利用率低、DataLoader 耗时高、训练长时间卡在数据准备阶段时，优先切换到 mmap 训练。
+- 如果当前实验规模较小，或只做功能验证，txt 流程依然可用且更直观。
 
 ### 4.5 日志分析 (Log Analysis)
 自动寻找并分析指定模型最近一次实验的验证集日志，并打印出效果最好的那一次结果。

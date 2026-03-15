@@ -15,8 +15,8 @@ features:
 
   array_feature_names:
     - user_history
-    # - user_history_clicked_category
-    # - user_history_clicked_subcategory
+    - user_history_clicked_category
+    - user_history_clicked_subcategory
     # - item_title_entity_id
     # - user_history_title_entity_id
     # - user_history_abstract_entity_type
@@ -34,8 +34,8 @@ features:
     - user_id
     - user_click_category
     - user_history
-    # - user_history_clicked_category
-    # - user_history_clicked_subcategory
+    - user_history_clicked_category
+    - user_history_clicked_subcategory
     # - user_history_title_entity_id
 
   array_max_length:
@@ -86,6 +86,7 @@ dataset:
   num_workers: 4
   pin_memory: true
   only_test_warm_up_user: false
+  load_npz: true
 
 
 train_hparams:

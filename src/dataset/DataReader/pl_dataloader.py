@@ -1,11 +1,11 @@
 import os
-import torch
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
-from omegaconf import OmegaConf
 from typing import Optional
 from .data_reader import DataReader
+from .data_reader_mmap import DataReaderMmap
 from ...Logger.logging import Logger
+
 
 class MINDDataModule(pl.LightningDataModule):
     """
@@ -35,17 +35,28 @@ class MINDDataModule(pl.LightningDataModule):
         self.batch_size = data_cfg.get('batch_size', 32)
         self.num_workers = data_cfg.get('num_workers', 4)
         self.pin_memory = data_cfg.get('pin_memory', True)
+        # load_npz 开关（沿用原字段名）：
+        # - False: 走原有 txt 特征读取链路（DataReader）
+        # - True : 走 mmap 分片读取链路（DataReaderMmap）
+        self.load_npz = data_cfg.get('load_npz', False)
         
         # 4. 组装完整路径
         feature_dir = os.path.join(self.out_basedir, 'extractored_feature')
-        self.train_file_path = os.path.join(feature_dir, "train_features.txt")
-        self.val_file_path = os.path.join(feature_dir, "dev_features.txt")
-        self.news_file_path = os.path.join(feature_dir, "item_features.txt")
+        if self.load_npz:
+            # MMAP 模式：
+            # train/dev/item 均使用 mmap 分片目录。
+            self.train_file_path = os.path.join(feature_dir, "train_features_mmap")
+            self.val_file_path = os.path.join(feature_dir, "dev_features_mmap")
+            self.news_file_path = os.path.join(feature_dir, "item_features_mmap")
+        else:
+            # TXT 模式：保持原始路径不变
+            self.train_file_path = os.path.join(feature_dir, "train_features.txt")
+            self.val_file_path = os.path.join(feature_dir, "dev_features.txt")
+            self.news_file_path = os.path.join(feature_dir, "item_features.txt")
         
         # 占位符
         self.train_dataset = None
         self.val_dataset = None
-
         # 日志
         self.logger = Logger.get_logger("MINDDataModule")
 
@@ -62,9 +73,11 @@ class MINDDataModule(pl.LightningDataModule):
 
             self.logger.info(f"Loading Train Data from: {self.train_file_path}")
             self.logger.info(f"Batch Size: {self.batch_size}, Workers: {self.num_workers}")
+            self.logger.info(f"Dataset load_npz: {self.load_npz}")
             
-            # 实例化你的 DataReader
-            self.train_dataset = DataReader(
+            # 根据 load_npz 选择读取器类型（True 时实际走 mmap 读取器）
+            reader_cls = DataReaderMmap if self.load_npz else DataReader
+            self.train_dataset = reader_cls(
                 config=self.conf, 
                 feature_file_path=self.train_file_path,
                 filter_negative=(self.conf.train_stage == "retrieval")
@@ -76,19 +89,20 @@ class MINDDataModule(pl.LightningDataModule):
             self.logger.info(f"Loading Val Data from: {self.val_file_path}")
             if self.conf.dataset.only_test_warm_up_user:
                 self.logger.info(f"Only test warm up user is True!")
-                self.val_dataset = DataReader(
+                # 验证集仅保留训练集中出现过的用户（warm user）
+                self.val_dataset = reader_cls(
                     config=self.conf, 
                     feature_file_path=self.val_file_path,
                     train_user_id_set=train_user_id_set
                 )
             else:
-                self.val_dataset = DataReader(
+                self.val_dataset = reader_cls(
                     config=self.conf, 
                     feature_file_path=self.val_file_path
                 )
 
             self.logger.info("Loading News Data from: {}".format(self.news_file_path))
-            self.news_dataset = DataReader(
+            self.news_dataset = reader_cls(
                 config=self.conf,
                 feature_file_path=self.news_file_path,
             )

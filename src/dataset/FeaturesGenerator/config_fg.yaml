@@ -55,13 +55,13 @@ features:
     user_history_title_entity_type: item_title_entity_type
 
   array_max_length:
-    user_history: 100
-    user_history_clicked_category: 100
-    user_history_clicked_subcategory: 100
+    user_history: 50
+    user_history_clicked_category: 50
+    user_history_clicked_subcategory: 50
     item_abstract_entity_type: 10
     item_title_entity_type: 10
     item_abstract_entity_id: 10
     item_title_entity_id: 10
-    user_history_title_entity_id: 200
-    user_history_abstract_entity_type: 200
-    user_history_title_entity_type: 200
+    user_history_title_entity_id: 100
+    user_history_abstract_entity_type: 100
+    user_history_title_entity_type: 100
