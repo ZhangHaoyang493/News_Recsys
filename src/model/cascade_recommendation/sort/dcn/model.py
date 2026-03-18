@@ -33,7 +33,7 @@ class DCN(BaseModelSort):
         super().__init__(config_path)
         
 
-        self.score_fc = DCNModel(input_dim=self.user_input_dim + self.item_input_dim, cross_num_layers=1, deep_hidden_dims=[128, 128, 128, 64, 1])
+        self.score_fc = DCNModel(input_dim=self.user_input_dim + self.item_input_dim, cross_num_layers=3, deep_hidden_dims=[128, 128, 128, 64, 1])
 
 
     def bceLoss(self, preds, labels):

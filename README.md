@@ -181,11 +181,21 @@ make log model=deep
 
 ### 排序模型 (Ranking Models)
 
+#### 在Deep模型上的特征工程效果对比：
+
 | Model | AUC | LogLoss | GAUC | MRR | NDCG@5 | HR@5 | NDCG@10 | HR@10 | Config Path | 备注 |
 |-------|-----|---------|------|-----|--------|------|---------|-------|-------------|------|
 | Deep  | 0.6344 | 0.1665 | 0.6023 | 0.3041 | 0.2533 | 0.4718 | 0.3135 | 0.6635 | [deep_conf.yaml](documents/cfg_record/deep_cfg_1.yaml) |基础的Deep模型|
-| Deep-v1 | 0.6627 | 0.1970 | 0.6302 | 0.3282 | 0.2790 | 0.5200 | 0.3385 | 0.7030 | [deep_conf.yaml](documents/cfg_record/deep_cfg_2.yaml) | 引入序列特征（用户历史item id、用户历史item的category以及用户历史item的subcategory） |
-| Deep-v2 | 0.6720 | 0.1638 | 0.6306 | 0.3423 | 0.2889 | 0.5293 | 0.3478 | 0.7089 | [deep_conf.yaml](documents/cfg_record/deep_cfg_3.yaml) | 在 Deep-v1 的基础上增加了数据集中预训练的title的embedding特征 |
+| Deep-v1 | 0.6526 | 0.1692 | 0.6125 | 0.3223 | 0.2709 | 0.4973 | 0.3299 | 0.6817 | [deep_conf.yaml](documents/cfg_record/deep_cfg_2.yaml) | 引入序列特征（用户历史item id、用户历史item的category以及用户历史item的subcategory） |
+| Deep-v2 | 0.6754 | 0.1632 | 0.6350 | 0.3417 | 0.2896 | 0.5306 | 0.3480 | 0.7076 | [deep_conf.yaml](documents/cfg_record/deep_cfg_3.yaml) | 在 Deep-v1 的基础上增加了数据集中预训练的title的embedding特征 |
+
+#### 基于Deep-v1的特征配置在不同模型上的效果对比：
+| Model | AUC | LogLoss | GAUC | MRR | NDCG@5 | HR@5 | NDCG@10 | HR@10 | Config Path | 备注 |
+|-------|-----|---------|------|-----|--------|------|---------|-------|-------------|------|
+| Deep | 0.6526 | 0.1692 | 0.6125 | 0.3223 | 0.2709 | 0.4973 | 0.3299 | 0.6817 | [deep_conf.yaml](documents/cfg_record/deep_cfg_2.yaml) | 引入序列特征（用户历史item id、用户历史item的category以及用户历史item的subcategory） |
+| DCN | 0.6603 | 0.1661 | 0.6164 | 0.3315 | 0.2755 | 0.5041 | 0.3357 | 0.6922 | - |
+| WideDeep | 0.6628 | 0.1803 | 0.6305 | 0.3298 | 0.2813 | 0.5232 | 0.3408 | 0.7063 | - |
+
 
 
 ## 数据集迁移说明 (Why MIND?)

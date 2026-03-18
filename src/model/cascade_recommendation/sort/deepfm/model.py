@@ -52,7 +52,7 @@ class DeepFM(BaseModelSort):
     
     def get_inp_embedding(self, batch):
         one_order_features, _, _ = self.get_embeddings_from_batch('one_order_embedding_table', batch, self.fm_features)
-        two_order_features, _, _ = self.get_embeddings_from_batch('base_embedding_table', batch, self.fm_features)  # Bxall_dim
+        two_order_features, _, _ = self.get_embeddings_from_batch('two_order_embedding_table', batch, self.fm_features)  # Bxall_dim
         deep_features, _, _ = self.get_embeddings_from_batch('base_embedding_table', batch, self.user_feature_names | self.item_feature_names)  # Bxall_dim
         B, _ = two_order_features.shape
         two_order_features = two_order_features.view(B, -1, self.fm_dim)
