@@ -1,6 +1,6 @@
-import sys
+import os
 
-from .model import Deep
+from .model import AutoInt
 import lightning as L
 from lightning.pytorch.loggers import TensorBoardLogger
 import argparse
@@ -10,19 +10,34 @@ from omegaconf import OmegaConf
 
 L.seed_everything(42, workers=True)
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="FM Training")
-    parser.add_argument("--config", "-c", type=str, default="fm_conf.yaml", help="Path to config file")
-    parser.add_argument("--extra_config", "-e", type=str, default=None, help="Path to extra config file")
+    base_dir = os.path.dirname(__file__)
+    parser = argparse.ArgumentParser(description="AutoInt Training")
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default=os.path.join(base_dir, "..", "base_sort_conf.yaml"),
+        help="Path to base config file",
+    )
+    parser.add_argument(
+        "--extra_config",
+        "-e",
+        type=str,
+        default=os.path.join(base_dir, "autoint_conf.yaml"),
+        help="Path to extra config file",
+    )
     return parser.parse_args()
+
 
 def load_config(args):
     base_config = OmegaConf.load(args.config)
     if args.extra_config:
         extra_config = OmegaConf.load(args.extra_config)
-        combined_config = OmegaConf.merge(base_config, extra_config)
-        return combined_config
+        return OmegaConf.merge(base_config, extra_config)
     return base_config
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -31,26 +46,25 @@ if __name__ == "__main__":
     data_module = MINDDataModule(config)
     data_module.setup()
 
-    model = Deep(config)
+    model = AutoInt(config)
 
-    # 从配置中获取训练参数
-    name = model.config.get('name', 'default_experiment')
-    max_epochs = model.train_hparams.get('max_epoch', 10)
-    val_freq = model.train_hparams.get('val_freq', 1)
+    name = model.config.get("name", "default_experiment")
+    max_epochs = model.train_hparams.get("max_epoch", 10)
+    val_freq = model.train_hparams.get("val_freq", 1)
+    devices = model.train_hparams.get("gpus", [0])
 
-    # 1. 自定义 Logger
     time_str = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     logger = TensorBoardLogger(
-        save_dir=".",      # 根目录
-        name="experiments",    # 实验名称 (默认是 lightning_logs)
-        version=name + '_' + time_str # <--- 这里！设置你想要的名字，代替 version_xxx
+        save_dir=".",
+        name="experiments",
+        version=name + "_" + time_str,
     )
 
     trainer = L.Trainer(
         max_epochs=max_epochs,
         val_check_interval=val_freq,
-        accelerator='gpu',
-        devices=1,
+        accelerator="gpu",
+        devices=devices,
         logger=logger,
     )
 

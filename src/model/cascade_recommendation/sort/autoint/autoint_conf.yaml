@@ -1,1 +1,11 @@
 name: autoint
+
+autoint_cfg:
+  att_embed_dim: 16
+  att_layer_num: 3
+  att_head_num: 2
+  att_res: true
+  use_deep: true
+  deep_hidden_dims:
+    - 128
+    - 64
