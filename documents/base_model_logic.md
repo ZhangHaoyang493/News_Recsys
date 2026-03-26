@@ -165,3 +165,73 @@ embeddings:
     *   不需要修改 `BaseModel` 代码。
     *   `self.user_input_dim` 会自动增加 32。
     *   在你的模型 `forward` 函数中，需要确保从 batch 中取出了 `user_age_level` 并传入 Embedding 层 lookup。
+
+---
+
+## 6. Array 特征聚合扩展（新增）
+
+为支持更灵活的序列特征建模，`BaseModel.get_embeddings_from_batch` 新增了
+可选参数：
+
+```python
+get_embeddings_from_batch(
+    embedding_tables_name,
+    batch,
+    feature_names,
+    array_pooling_fn=None,
+    array_pooling_context=None
+)
+```
+
+### 6.1 默认行为（向后兼容）
+
+不传 `array_pooling_fn` 时，array 特征仍使用
+`BaseModel.array_feature_pooling`（mask mean pooling），与历史逻辑完全一致。
+
+### 6.2 自定义聚合函数签名
+
+当前支持两种签名：
+
+```python
+pooling_fn(embedding, mask)
+pooling_fn(embedding, mask, context)
+```
+
+其中：
+* `embedding`: 序列特征 lookup 后的张量，形状通常为 `[B, L, D]`
+* `mask`: 对应序列 mask，形状通常为 `[B, L]`
+* `context`: 额外上下文信息字典（可选）
+
+### 6.3 context 中默认可用字段
+
+当使用三参签名时，`context` 默认包含：
+* `feature_name`
+* `batch`
+* `embedding_tables_name`
+* `model`
+
+此外你可以通过 `array_pooling_context` 注入额外字段（例如 item 侧向量、
+query 向量、注意力参数等），用于注意力式聚合。
+
+### 6.4 使用示例（模型内自定义聚合）
+
+```python
+def attention_pooling(seq_emb, seq_mask, context):
+    # 例：从 context 读取 query 向量，做简单 attention
+    query = context["query_embedding"]  # [B, D]
+    attn = (seq_emb * query.unsqueeze(1)).sum(dim=-1)  # [B, L]
+    attn = attn.masked_fill(seq_mask <= 0, -1e9)
+    weight = torch.softmax(attn, dim=-1)
+    return (seq_emb * weight.unsqueeze(-1)).sum(dim=1)  # [B, D]
+
+features, _, _ = self.get_embeddings_from_batch(
+    "base_embedding_table",
+    batch,
+    self.user_feature_names,
+    array_pooling_fn=attention_pooling,
+    array_pooling_context={"query_embedding": item_emb}
+)
+```
+
+该设计兼容“纯聚合”和“依赖额外上下文的聚合”两类需求，便于后续在具体模型中
+演进到 DIN/Attention 等更复杂的序列建模方案。

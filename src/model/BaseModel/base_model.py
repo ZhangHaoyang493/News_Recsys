@@ -3,7 +3,8 @@ import os
 import logging
 import math
 import json
-from typing import Dict, Any, List, Optional, Set, Tuple, Union
+import inspect
+from typing import Dict, Any, List, Optional, Set, Tuple, Union, Callable
 
 import lightning as L
 import torch
@@ -329,7 +330,12 @@ class BaseModel(L.LightningModule):
         
         return self.embedding_tables[embedding_tables_name][emb_fname](feature_value.long())
 
-    def array_feature_pooling(self, embedding: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def array_feature_pooling(
+        self,
+        embedding: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        context: Optional[Dict[str, Any]] = None
+    ) -> torch.Tensor:
         if mask is None:
             return embedding.mean(dim=1)
         mask = mask.unsqueeze(-1)
@@ -338,10 +344,48 @@ class BaseModel(L.LightningModule):
         sum_mask = mask.sum(dim=1) + 1e-8 
         return sum_emb / sum_mask
 
-    def get_embeddings_from_batch(self, embedding_tables_name: str, batch: Dict[str, torch.Tensor], feature_names: Set[str]) -> Tuple[torch.Tensor, List[int], List[str]]:
+    def _apply_array_pooling_fn(
+        self,
+        array_pooling_fn: Callable[..., torch.Tensor],
+        embedding: torch.Tensor,
+        mask: Optional[torch.Tensor],
+        context: Dict[str, Any]
+    ) -> torch.Tensor:
+        """
+        支持两类自定义聚合函数签名：
+        1) pooling_fn(embedding, mask)
+        2) pooling_fn(embedding, mask, context)
+        """
+        try:
+            signature = inspect.signature(array_pooling_fn)
+            params = signature.parameters.values()
+            has_var_positional = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params)
+            positional_params = [
+                p for p in params
+                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            ]
+            if has_var_positional or len(positional_params) >= 3:
+                return array_pooling_fn(embedding, mask, context)
+            return array_pooling_fn(embedding, mask)
+        except (TypeError, ValueError):
+            try:
+                return array_pooling_fn(embedding, mask, context)
+            except TypeError:
+                return array_pooling_fn(embedding, mask)
+
+    def get_embeddings_from_batch(
+        self,
+        embedding_tables_name: str,
+        batch: Dict[str, torch.Tensor],
+        feature_names: Set[str],
+        array_pooling_fn: Optional[Callable[..., torch.Tensor]] = None,
+        array_pooling_context: Optional[Dict[str, Any]] = None
+    ) -> Tuple[torch.Tensor, List[int], List[str]]:
         sorted_features = sorted(list(feature_names))
         emb_list = []
         dims = []
+        pooling_fn = array_pooling_fn or self.array_feature_pooling
+        base_pooling_context = array_pooling_context or {}
         
         for fname in sorted_features:
             if fname not in batch:
@@ -360,7 +404,14 @@ class BaseModel(L.LightningModule):
             emb = self.get_feature_embedding(embedding_tables_name, fname, val)
             
             if fname in self.array_feature_names:
-                emb = self.array_feature_pooling(emb, mask)
+                pooling_context = {
+                    "feature_name": fname,
+                    "batch": batch,
+                    "embedding_tables_name": embedding_tables_name,
+                    "model": self,
+                    **base_pooling_context
+                }
+                emb = self._apply_array_pooling_fn(pooling_fn, emb, mask, pooling_context)
             
             emb_list.append(emb)
             dims.append(emb.shape[1])
