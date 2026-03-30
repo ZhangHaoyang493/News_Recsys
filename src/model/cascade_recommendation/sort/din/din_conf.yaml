@@ -1,0 +1,18 @@
+name: din
+
+din_cfg:
+  # 用户序列特征 与 item 侧同域特征 的映射关系。
+  # DIN 注意力会按该映射取 query，而不是使用全部 item 特征。
+  array_item_feature_pairs:
+    user_history: item_id
+    user_history_clicked_category: category
+    user_history_clicked_subcategory: subcategory
+
+  att_hidden_dims:
+    - 64
+    - 32
+  dnn_hidden_dims:
+    - 128
+    - 128
+    - 64
+    - 1
