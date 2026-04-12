@@ -28,11 +28,19 @@ fe_npz:
 
 # 训练排序模型，指令示例: make train model=deep
 .PHONY: train
+stage ?= sort
+model_group ?= classic_sort_models
 train:
-	@if [ "$(stage)" = "retrieval" ] && [ "$(model)" = "itemcf" ]; then \
-		python -m src.model.cascade_recommendation.$(stage).$(model).itemCF; \
+	@if [ -z "$(model)" ]; then \
+		echo "Usage: make train model=<model_name> [stage=sort] [model_group=classic_sort_models]"; \
+		exit 1; \
+	elif [ "$(stage)" != "sort" ]; then \
+		echo "当前目录结构仅支持 stage=sort，收到 stage=$(stage)"; \
+		exit 1; \
 	else \
-		python -m src.model.cascade_recommendation.$(stage).$(model).train -c src/model/cascade_recommendation/$(stage)/base_$(stage)_conf.yaml -e src/model/cascade_recommendation/$(stage)/$(model)/$(model)_conf.yaml; \
+		python -m src.model.sort_models.$(model_group).$(model).train \
+			-c src/model/sort_models/$(model_group)/base_sort_conf.yaml \
+			-e src/model/sort_models/$(model_group)/$(model)/$(model)_conf.yaml; \
 	fi
 
 # 分析日志，指令示例: make log model=deep

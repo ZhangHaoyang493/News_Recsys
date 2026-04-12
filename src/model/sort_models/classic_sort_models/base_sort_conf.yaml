@@ -1,4 +1,4 @@
-train_stage: retrieval
+train_stage: sort
 
 paths:
   out_basedir: "src/tmp"
@@ -10,9 +10,6 @@ features:
     - category
     - subcategory
     - user_click_category
-    - impression_id
-    # - item_abstract_entity_type
-    # - item_title_entity_type
 
   dense_feature_names: []
 
@@ -20,91 +17,81 @@ features:
     - user_history
     - user_history_clicked_category
     - user_history_clicked_subcategory
-    # - item_abstract_entity_type
+    # - item_title_entity_id
+    # - user_history_title_entity_id
+    # - user_history_abstract_entity_type
+    # - user_history_title_entity_type
     # - item_title_entity_type
-    # - item_abstract_entity_id
-    - item_title_entity_id
-    - user_history_title_entity_id
+    # - item_abstract_entity_type
 
   item_feature_names:
     - item_id
     - category
     - subcategory
-    # - item_abstract_entity_type
-    # - item_title_entity_type
-    # - item_abstract_entity_id
-    - item_title_entity_id
+    # - item_title_entity_id
 
   user_feature_names:
-    # - user_id
+    - user_id
     - user_click_category
-    # - user_history
+    - user_history
     - user_history_clicked_category
     - user_history_clicked_subcategory
-    - user_history_title_entity_id
-
-    
+    # - user_history_title_entity_id
 
   array_max_length:
-    user_history: 150
-    user_history_clicked_category: 150
-    user_history_clicked_subcategory: 150
-    item_abstract_entity_type: 10
-    item_title_entity_type: 10
-    # item_abstract_entity_id: 10
+    user_history: 50
+    user_history_clicked_category: 50
+    user_history_clicked_subcategory: 50
     item_title_entity_id: 10
-    user_history_title_entity_id: 200
-
+    user_history_title_entity_id: 100
+    # user_history_abstract_entity_type: 200
+    # user_history_title_entity_type: 200
+    # item_title_entity_type: 10
+    # item_abstract_entity_type: 10
 
 embeddings:
   embedding_table_size:
-    # user_id: 94058
+    user_id: 94058
     item_id: 65239
     category: 20
     subcategory: 271
-    user_click_category: 19
-    # item_abstract_entity_type: 23
-    # item_title_entity_type: 23
-    # item_abstract_entity_id: -1
+    user_click_category: 20
     item_title_entity_id: -1
     user_history_title_entity_id: -1
 
   embedding_tables:
     base_embedding_table:
       embedding_dims:
-        # user_id: 32 # 16
+        user_id: 32 # 16
         item_id: 32
         category: 16
         subcategory: 16
         user_click_category: 16
-        # item_abstract_entity_id: 100
         item_title_entity_id: 100
         user_history_title_entity_id: 100
-        # item_abstract_entity_type: 16
-        # item_title_entity_type: 16
-      share_emb_table_features: 
+      share_emb_table_features:
         user_history: item_id
-        user_click_category: category
+        # user_click_category: category
         user_history_clicked_category: category
         user_history_clicked_subcategory: subcategory
         # item_abstract_entity_id: 100
         # item_title_entity_id: 100
         user_history_title_entity_id: item_title_entity_id
-      
       pretrain_embedding:
         # item_abstract_entity_id: "/data2/zhy/News_Recsys/pretrain_embedding/abstract_entity_embedding.ckpt"
         item_title_entity_id: "/data2/zhy/News_Recsys/pretrain_embedding/title_entity_embedding.ckpt"
 
 dataset:
-  batch_size: 1024
-  num_workers: 8
+  batch_size: 512
+  num_workers: 4
   pin_memory: true
-  only_test_warm_up_user: true
+  only_test_warm_up_user: false
+  load_npz: true
 
 
 train_hparams:
-  val_freq: 1.0
-  max_epoch: 100
+  val_freq: 0.5
+  max_epoch: 40
   lr: 1.0e-3
   min_lr: 5.0e-6
   lr_milestones:
@@ -113,5 +100,4 @@ train_hparams:
   max_step: 300000
   device: "gpu"
   gpus:
-    - 2
-  negative_sample_rate: 3
+    - 0
